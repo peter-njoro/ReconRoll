@@ -8,6 +8,8 @@ So you’re telling me… you *could* remember faces like a normal functioning h
 Nah fam, let’s **build software that stalks—I mean, tracks—people's faces** for attendance instead.  
 Work smarter, not... human-er 🤖.
 
+“Caught wind of a pretty cool idea around ethical attendance systems 👀 — couldn’t help spinning up my own chaotic version. Totally unaffiliated (I swear 😅), but still down to collaborate if anyone’s building something similar 👋.”
+
 ---
 
 ## 💡 What Is This?
