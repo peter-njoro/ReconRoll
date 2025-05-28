@@ -79,48 +79,49 @@ Use it for:
 5. Everyone claps. 🎉
 
 ## 🗂️ Folder Structure (Django + Face Recognition Edition)
-  facetrack-lite/
-  ├── manage.py                                # The boss baby of Django
-  ├── .gitignore                               # Because some files just don't deserve Git
-  ├── README.md                                # The holy scroll (with ✨ sarcasm)
-  ├── requirements.txt                         # A list of libraries you'll totally forget to pin
-  ├── env/                                     # Your virtual env. Not in Git. Not in your business.
-  │
-  ├── config/                                  # Django project settings folder
-  │   ├── __init__.py
-  │   ├── settings.py                          # Where you hardcode secrets until you regret it
-  │   ├── urls.py                              # URL jungle
-  │   ├── asgi.py
-  │   └── wsgi.py
-  │
-  ├── recognition/                             # Your app for face detection and attendance
-  │   ├── __init__.py
-  │   ├── admin.py                             # Register models here if you're feeling spicy
-  │   ├── apps.py
-  │   ├── models.py                            # Tables that judge your life choices
-  │   ├── views.py                             # Where logic lives, breaks, and rises again
-  │   ├── forms.py                             # For the brave: custom forms
-  │   ├── urls.py                              # App-level URLs (so your main urls.py can breathe)
-  │   ├── face_utils.py                        # Where OpenCV/face_recognition sorcery lives
-  │   ├── attendance.py                        # Time tracking so your app can snitch who’s late
-  │   ├── templates/
-  │   │   └── recognition/
-  │   │       ├── index.html                   # Homepage — probably has buttons
-  │   │       ├── enroll.html                  # For registering new faces
-  │   │       └── attendance.html              # “Hello boss, here’s the attendance”
-  │   ├── static/
-  │   │   └── recognition/
-  │   │       ├── css/
-  │   │       │   └── styles.css               # Where the aesthetic vibes happen
-  │   │       ├── js/
-  │   │       │   └── main.js                  # Optional JS chaos
-  │   │       └── uploads/
-  │   │           └── faces/                   # Where face images chill
-  │   └── migrations/                          # Django does black magic here
-  │
-  └── db.sqlite3                               # Your default DB until you meet PostgreSQL
+```bash
+facetrack-lite/
+├── manage.py                                # The boss baby of Django
+├── .gitignore                               # Because some files just don't deserve Git
+├── README.md                                # The holy scroll (with ✨ sarcasm)
+├── requirements.txt                         # A list of libraries you'll totally forget to pin
+├── env/                                     # Your virtual env. Not in Git. Not in your business.
+│
+├── config/                                  # Django project settings folder
+│   ├── __init__.py
+│   ├── settings.py                          # Where you hardcode secrets until you regret it
+│   ├── urls.py                              # URL jungle
+│   ├── asgi.py
+│   └── wsgi.py
+│
+├── recognition/                             # Your app for face detection and attendance
+│   ├── __init__.py
+│   ├── admin.py                             # Register models here if you're feeling spicy
+│   ├── apps.py
+│   ├── models.py                            # Tables that judge your life choices
+│   ├── views.py                             # Where logic lives, breaks, and rises again
+│   ├── forms.py                             # For the brave: custom forms
+│   ├── urls.py                              # App-level URLs (so your main urls.py can breathe)
+│   ├── face_utils.py                        # Where OpenCV/face_recognition sorcery lives
+│   ├── attendance.py                        # Time tracking so your app can snitch who’s late
+│   ├── templates/
+│   │   └── recognition/
+│   │       ├── index.html                   # Homepage — probably has buttons
+│   │       ├── enroll.html                  # For registering new faces
+│   │       └── attendance.html              # “Hello boss, here’s the attendance”
+│   ├── static/
+│   │   └── recognition/
+│   │       ├── css/
+│   │       │   └── styles.css               # Where the aesthetic vibes happen
+│   │       ├── js/
+│   │       │   └── main.js                  # Optional JS chaos
+│   │       └── uploads/
+│   │           └── faces/                   # Where face images chill
+│   └── migrations/                          # Django does black magic here
+│
+└── db.sqlite3                               # Your default DB until you meet PostgreSQL
 
-
+```
 ## 🚨 Disclaimer
 
 This project is for **educational & demo purposes**.  
