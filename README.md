@@ -79,7 +79,7 @@ Use it for:
 5. Everyone claps. 🎉
 
 ## 🗂️ Folder Structure (Django + Face Recognition Edition)
-  `facetrack-lite/
+  facetrack-lite/
   ├── manage.py                                # The boss baby of Django
   ├── .gitignore                               # Because some files just don't deserve Git
   ├── README.md                                # The holy scroll (with ✨ sarcasm)
@@ -118,7 +118,7 @@ Use it for:
   │   │           └── faces/                   # Where face images chill
   │   └── migrations/                          # Django does black magic here
   │
-  └── db.sqlite3                               # Your default DB until you meet PostgreSQL`
+  └── db.sqlite3                               # Your default DB until you meet PostgreSQL
 
 
 ## 🚨 Disclaimer
