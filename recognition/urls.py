@@ -7,4 +7,6 @@ app_name = 'recognition'
 
 urlpatterns = [
     path('', views.index, name='index'),
+    path('enroll/', views.enroll_view, name='enroll'),
+    path('enroll/success', views.enroll_view, name='enroll_success'),
 ]
