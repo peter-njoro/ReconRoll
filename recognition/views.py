@@ -34,7 +34,7 @@ def enroll_view(request):
             if encoding is not None:
                 person.encoding = pickle.dumps(encoding)
                 person.save()
-                return redirect('enroll_success')
+                return redirect('recognition:enroll_success')
             else:
                 form.add_error(None, 'No face detected. Try another image.')
 
@@ -45,3 +45,6 @@ def enroll_view(request):
         'form':form
     }
     return render(request, 'recognition/enroll.html', context)
+
+def enroll_success(request):
+    return render(request, 'recognition/enroll_success.html')
