@@ -3,6 +3,9 @@ from .forms import PersonForm
 from .face_utils import  encode_face
 import io
 import pickle
+from django.http import StreamingHttpResponse
+import cv2
+from .face_utils import detect_faces_from_frame
 
 
 
@@ -48,3 +51,33 @@ def enroll_view(request):
 
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
+
+def gen_frames():
+    cap = cv2.VideoCapture(0)
+
+    while True:
+        success, frame = cap.read()
+        if not success:
+            break
+
+        faces = detect_faces_from_frame(frame)
+
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+        # Encode the frame
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+
+        yield(b'--frame\r\n'
+              b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+        cap.release()
+
+def face_detection_stream(request):
+    return StreamingHttpResponse(gen_frames(), content_type='multipart/x-mixed-replace; boundary=frame')
+
+def face_detection_page(request):
+    return render(request, 'recognition/face_detection.html')
+
+
