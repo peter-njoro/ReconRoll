@@ -12,6 +12,7 @@ import os
 import face_recognition
 from django.http import StreamingHttpResponse
 from django.conf import settings
+from django.views.decorators import gzip
 
 
 
@@ -104,7 +105,11 @@ def load_known_faces():
 
 def generate_live_feed():
     known_encodings, known_names = load_known_faces()
-    cap = cv2.VideoCapture(0)
+    try:
+        cap = cv2.VideoCapture(0)
+    except Exception as e:
+        print("Error:", e)
+        return None
 
     while True:
         ret, frame = cap.read()
@@ -117,19 +122,19 @@ def generate_live_feed():
 
         # Recognize faces
         face_locations = face_recognition.face_locations(rgb_small_frame)
-        face_encoding = face_recognition.face_encodings(rgb_small_frame, face_locations)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
-        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encoding):
+        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
             matches = face_recognition.compare_faces(known_encodings, face_encoding)
             name = "Unknown"
 
             face_distances = face_recognition.face_distance(known_encodings, face_encoding)
-            if matches:
+            if len(face_distances) > 0:
                 best_match_index = face_distances.argmin()
                 if matches[best_match_index]:
                     name = known_names[best_match_index]
 
-            # Scale backup face locations since they were resized.
+            # Scale back face locations since frame was resized
             top *= 4
             right *= 4
             bottom *= 4
@@ -137,14 +142,16 @@ def generate_live_feed():
 
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
             cv2.rectangle(frame, (left, bottom - 20), (right, bottom), (0, 255, 0), cv2.FILLED)
-            cv2.putText(frame, name, (left + 2, bottom -5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+            cv2.putText(frame, name, (left + 2, bottom - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1)
+
         _, jpeg = cv2.imencode('.jpg', frame)
         frame_bytes = jpeg.tobytes()
-        yield(b'--frame\r\n'
-              b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n\r\n')
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n\r\n')
 
-        cap.release()
+    cap.release()
 
+@gzip.gzip_page
 def live_recognition_stream(request):
     return StreamingHttpResponse(generate_live_feed(), content_type='multipart/x-mixed-replace; boundary=frame')
 
