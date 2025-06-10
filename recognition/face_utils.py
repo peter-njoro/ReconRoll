@@ -7,7 +7,7 @@ import numpy as np
 import os
 import face_recognition
 
-
+# REMINDER TO CREATE A FUNCTION THAT TAKES THE ENCODINGS AND STORES THEM IN THE DATABASE UNDER THE INSTITUION
 
 # def encode_face(image_path):
 #     image = face_recognition.load_image_file(image_path)
