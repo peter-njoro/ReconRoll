@@ -34,12 +34,12 @@ import time
 # Configuration
 known_faces_dir = './uploads/faces/'
 face_idcard_dir = './uploads/faces/cards/'
-scale_factor = 0.25  # Reduced resolution for processing
-tolerance = 0.5  # Lower = stricter matching
-target_fps = 30  # Target frames per second
-process_every_n_frames = 3  # Process every nth frame to reduce load
-card_display_frames = 10  # Number of frames to persist card display
-min_face_size = 100  # Minimum face size in pixels to process (after scaling)
+scale_factor = 0.25
+tolerance = 0.5
+target_fps = 30
+process_every_n_frames = 3
+card_display_frames = 10
+min_face_size = 100
 
 # === Load known faces ===
 print("🔄 Loading known face images...")
@@ -63,23 +63,39 @@ for filename in sorted(os.listdir(known_faces_dir)):
 
         # Convert to RGB and resize for faster encoding
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        small_image = cv2.resize(rgb_image, (0, 0), fx=0.5, fy=0.5)  # Half size for encoding
+        # Trying the original size first
+        encodings = face_recognition.face_encodings(rgb_image)
+        if not encodings:
+            # Try larger size if no face detected
+            larger_image = cv2.resize(rgb_image, (0, 0), fx=1.5, fy=1.5)
+            encodings = face_recognition.face_encodings(larger_image)
 
-        encodings = face_recognition.face_encodings(small_image)
         if encodings:
             known_face_encodings.append(encodings[0])
-            name = os.path.splitext(filename)[0].capitalize()
+            name = os.path.splitext(filename)[0].replace('_', ' ').title()
             known_face_names.append(name)
+            print(f"✅ Loaded: {name} (encoding shape: {encodings[0].shape})")
 
-            # Preload and resize ID card if exists
-            idcard_path = os.path.join(face_idcard_dir, f'ID_{name}.jpg')
-            if os.path.exists(idcard_path):
-                id_card = cv2.imread(idcard_path)
-                # Resize to common size to save memory and avoid resizing later
-                id_card_cache[name] = cv2.resize(id_card, (200, 250))  # Standard ID card size
-            print(f"✅ Loaded: {name}")
         else:
             print(f"⚠️ No face detected in: {path}")
+
+        # small_image = cv2.resize(rgb_image, (0, 0), fx=0.5, fy=0.5)  # Half size for encoding
+        #
+        # encodings = face_recognition.face_encodings(small_image)
+        # if encodings:
+        #     known_face_encodings.append(encodings[0])
+        #     name = os.path.splitext(filename)[0].capitalize()
+        #     known_face_names.append(name)
+        #
+        #     # Preload and resize ID card if exists
+        #     idcard_path = os.path.join(face_idcard_dir, f'ID_{name}.jpg')
+        #     if os.path.exists(idcard_path):
+        #         id_card = cv2.imread(idcard_path)
+        #         # Resize to common size to save memory and avoid resizing later
+        #         id_card_cache[name] = cv2.resize(id_card, (200, 250))  # Standard ID card size
+        #     print(f"✅ Loaded: {name}")
+        # else:
+        #     print(f"⚠️ No face detected in: {path}")
     except Exception as e:
         print(f"⚠️ Error processing {path}: {str(e)}")
 
@@ -119,6 +135,17 @@ while cap.isOpened():
     # Only process every nth frame to improve FPS
     process_this_frame = frame_count % process_every_n_frames == 0
 
+    # Debug view
+    debug_frame = frame.copy()
+    cv2.putText(debug_frame, f"Processing: {'YES' if process_this_frame else 'NO'}",
+                (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+    # show the resized version being processed
+    small_debug = cv2.resize(debug_frame, (0, 0), fx=0.5, fy=0.5)
+    cv2.imshow('Processing View', small_debug)
+
+
+
     # Resize and convert frame once
     small_frame = cv2.resize(frame, (0, 0), fx=scale_factor, fy=scale_factor)
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
@@ -130,7 +157,7 @@ while cap.isOpened():
         # Use faster face detection model based on scale factor
         face_locations = face_recognition.face_locations(
             rgb_small_frame,
-            number_of_times_to_upsample=1,  # Reduce upsampling for speed
+            number_of_times_to_upsample=2,  # Reduce upsampling for speed
             model=face_detection_model
         )
 
@@ -141,23 +168,30 @@ while cap.isOpened():
         ]
 
         if face_locations:
+            print(f"🔍 Detected {len(face_locations)} face(s)")
             face_encodings = face_recognition.face_encodings(
                 rgb_small_frame,
                 face_locations,
                 num_jitters=1  # Reduce from default 10 for speed
             )
+            print(f"📊 Generated {len(face_encodings)} encoding(s)")
 
             for face_encoding, face_location in zip(face_encodings, face_locations):
                 # Fast distance calculation using numpy
                 distances = np.linalg.norm(known_face_encodings - face_encoding, axis=1)
+                print("📐 Distances to known faces:", distances)
                 best_match_index = np.argmin(distances)
+                print(f"🏆 Best match index: {best_match_index}, Distance: {distances[best_match_index]}")
 
                 name = "unknown"
                 if distances[best_match_index] <= tolerance:
                     name = known_face_names[best_match_index]
                     # Store face location with recognition info
                     recognized_faces[name] = (frame_count, face_location)
+                    print(f"✅ Recognized: {name} (distance: {distances[best_match_index]:.2f})")
 
+                else:
+                    print(f"❌ No match found (min distance {distances[best_match_index]:.2f} > tolerance {tolerance})")
                 face_names.append(name)
         else:
             # If no faces detected, clear some memory
