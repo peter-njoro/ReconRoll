@@ -63,39 +63,23 @@ for filename in sorted(os.listdir(known_faces_dir)):
 
         # Convert to RGB and resize for faster encoding
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        # Trying the original size first
-        encodings = face_recognition.face_encodings(rgb_image)
-        if not encodings:
-            # Try larger size if no face detected
-            larger_image = cv2.resize(rgb_image, (0, 0), fx=1.5, fy=1.5)
-            encodings = face_recognition.face_encodings(larger_image)
+        small_image = cv2.resize(rgb_image, (0, 0), fx=0.5, fy=0.5)  # Half size for encoding
 
+        encodings = face_recognition.face_encodings(small_image)
         if encodings:
             known_face_encodings.append(encodings[0])
-            name = os.path.splitext(filename)[0].replace('_', ' ').title()
+            name = os.path.splitext(filename)[0].capitalize()
             known_face_names.append(name)
-            print(f"✅ Loaded: {name} (encoding shape: {encodings[0].shape})")
 
+            # Preload and resize ID card if exists
+            idcard_path = os.path.join(face_idcard_dir, f'ID_{name}.jpg')
+            if os.path.exists(idcard_path):
+                id_card = cv2.imread(idcard_path)
+                # Resize to common size to save memory and avoid resizing later
+                id_card_cache[name] = cv2.resize(id_card, (200, 250))  # Standard ID card size
+            print(f"✅ Loaded: {name}")
         else:
             print(f"⚠️ No face detected in: {path}")
-
-        # small_image = cv2.resize(rgb_image, (0, 0), fx=0.5, fy=0.5)  # Half size for encoding
-        #
-        # encodings = face_recognition.face_encodings(small_image)
-        # if encodings:
-        #     known_face_encodings.append(encodings[0])
-        #     name = os.path.splitext(filename)[0].capitalize()
-        #     known_face_names.append(name)
-        #
-        #     # Preload and resize ID card if exists
-        #     idcard_path = os.path.join(face_idcard_dir, f'ID_{name}.jpg')
-        #     if os.path.exists(idcard_path):
-        #         id_card = cv2.imread(idcard_path)
-        #         # Resize to common size to save memory and avoid resizing later
-        #         id_card_cache[name] = cv2.resize(id_card, (200, 250))  # Standard ID card size
-        #     print(f"✅ Loaded: {name}")
-        # else:
-        #     print(f"⚠️ No face detected in: {path}")
     except Exception as e:
         print(f"⚠️ Error processing {path}: {str(e)}")
 
