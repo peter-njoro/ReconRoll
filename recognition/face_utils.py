@@ -6,6 +6,7 @@ import numpy as np
 # from PIL import Image
 import os
 import face_recognition
+import time
 
 # REMINDER TO CREATE A FUNCTION THAT TAKES THE ENCODINGS AND STORES THEM IN THE DATABASE UNDER THE INSTITUION
 
@@ -28,28 +29,28 @@ import face_recognition
 #     return faces
 
 # === Configuration ===
+
+# === Settings ===
 known_faces_dir = './uploads/faces/'
 face_idcard_dir = './uploads/faces/cards/'
-scale_factor = 0.25  # 0.25 = 1/4 size; use 0.5 or 1.0 if needed
-tolerance = 0.5  # Lower = stricter matching (default is 0.6)
+scale_factor = 0.25  # Smaller = faster
+tolerance = 0.5      # Lower = stricter match
+card_display_frames = 10  # Number of frames to persist card display
 
 # === Load known faces ===
 known_face_encodings = []
 known_face_names = []
 
 print("🔄 Loading known face images...")
-
 for filename in os.listdir(known_faces_dir):
     path = os.path.join(known_faces_dir, filename)
     image = cv2.imread(path)
-
     if image is None:
         print(f"⚠️ Could not read image: {path}")
         continue
 
     rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     encodings = face_recognition.face_encodings(rgb_image)
-
     if encodings:
         known_face_encodings.append(encodings[0])
         name = os.path.splitext(filename)[0].capitalize()
@@ -67,65 +68,93 @@ cap_width = int(cap.get(3))
 cap_height = int(cap.get(4))
 print("📷 Starting webcam...")
 
-while cap.isOpened():
-    success, frame = cap.read()
+process_this_frame = True
+frame_count = 0
+prev_time = time.time()
+recognized_faces = {}  # name -> last seen frame index
 
-    if not success:
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
         print("❌ Failed to read from webcam.")
         break
 
+    frame_count += 1
     frame = cv2.flip(frame, 1)
+
+    # Resize for performance
     small_frame = cv2.resize(frame, (0, 0), fx=scale_factor, fy=scale_factor)
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-    face_locations = face_recognition.face_locations(rgb_small_frame)
-    face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+    face_locations = []
+    face_encodings = []
+    face_names = []
 
-    print(f"🧠 Detected {len(face_encodings)} face(s) in frame.")
+    if process_this_frame:
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
-    for face_location, face_encoding in zip(face_locations, face_encodings):
-        distances = face_recognition.face_distance(known_face_encodings, face_encoding)
-        matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=tolerance)
+        for face_encoding in face_encodings:
+            distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance)
 
-        print(f"🔍 Distances: {distances}")
-        print(f"✅ Matches: {matches}")
+            name = "unknown"
+            if any(matches):
+                best_match_index = np.argmin(distances)
+                if matches[best_match_index]:
+                    name = known_face_names[best_match_index]
+                    recognized_faces[name] = frame_count  # Update last seen
 
-        if any(matches):
-            best_match_index = np.argmin(distances)
-            if matches[best_match_index]:
-                name = known_face_names[best_match_index]
-                first_name = name.split(" ")[0]
+            face_names.append(name)
 
-                # Scale back up face location
-                y1, x2, y2, x1 = [int(coord / scale_factor) for coord in face_location]
+    # Draw all faces (recognized or not)
+    for (top, right, bottom, left), name in zip(face_locations, face_names):
+        top, right, bottom, left = [int(coord / scale_factor) for coord in (top, right, bottom, left)]
+        color = (0, 255, 0) if name != "unknown" else (0, 0, 255)
 
-                # Draw face box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.rectangle(frame, (x1, y2 - 35), (x2, y2), (0, 255, 0), cv2.FILLED)
-                cv2.putText(frame, first_name, (x1 + 6, y2 - 6),
-                            cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
+        # Draw bounding box and label
+        cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+        cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
+        cv2.putText(frame, name.split()[0], (left + 6, bottom - 6),
+                    cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
 
-                # Show ID card
-                idcard_path = os.path.join(face_idcard_dir, f'ID_{name}.jpg')
-                idcard = cv2.imread(idcard_path)
-                if idcard is not None:
-                    face_width = x2 - x1
-                    face_height = y2 - y1
-                    idcard_resized = cv2.resize(idcard, (face_width, face_height))
-                    y_end = min(y1 + face_height, cap_height)
-                    x_start = x2
-                    x_end = min(x2 + face_width, cap_width)
+        # Show ID card if recently recognized
+        if name in recognized_faces and (frame_count - recognized_faces[name]) < card_display_frames:
+            idcard_path = os.path.join(face_idcard_dir, f'ID_{name}.jpg')
+            idcard = cv2.imread(idcard_path)
+            if idcard is not None:
+                face_width = right - left
+                face_height = bottom - top
+                idcard_resized = cv2.resize(idcard, (face_width, face_height))
 
-                    frame[y1:y_end, x_start:x_end] = idcard_resized[0:(y_end - y1), 0:(x_end - x2)]
-                    print(f"{name} is identified succesfully!")
-                else:
-                    print(f"⚠️ ID card not found for {name}: {idcard_path}")
-        else:
-            print("🚫 No known face match.")
+                x_start = right
+                x_end = min(right + face_width, cap_width)
+                y_end = min(top + face_height, cap_height)
 
+                frame[top:y_end, x_start:x_end] = idcard_resized[0:(y_end - top), 0:(x_end - right)]
+            else:
+                print(f"⚠️ ID card not found for {name}: {idcard_path}")
+
+    # Display FPS
+    curr_time = time.time()
+    fps = 1 / (curr_time - prev_time)
+    prev_time = curr_time
+    cv2.putText(frame, f'FPS: {int(fps)}', (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+    # Show frame
     cv2.imshow('Face Recognition', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+    process_this_frame = not process_this_frame
+
 cap.release()
 cv2.destroyAllWindows()
+
+# 🛠 Suggested Tweaks
+# GPU Acceleration: Consider using dlib with CUDA or switching to face_recognition + ONNX models.
+#
+# Multi-threading: Move webcam capture to a separate thread to decouple UI from detection.
+#
+# Confidence Display: Show distance (or confidence) score under name box.
