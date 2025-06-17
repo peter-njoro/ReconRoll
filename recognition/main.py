@@ -9,11 +9,11 @@ from video_utils import *
 known_faces_dir = './uploads/faces/'
 face_idcard_dir = './uploads/faces/cards/'
 scale_factor = 0.25
-tolerance = 0.55
+tolerance = 0.6
 target_fps = 30
 process_every_n_frames = 3
 card_display_frames = 10
-min_face_size = 100
+min_face_size = 60
 
 # Load known faces
 print("🔄 Loading known face images...")

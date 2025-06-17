@@ -17,15 +17,15 @@ def load_known_faces(known_faces_dir, id_card_dir, scale=0.5):
         if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
             continue
 
-        path = os.path.join(known_faces_dir, filename)
+        known_face_encodings, known_face_names, id_card_cache = load_known_faces(known_faces_dir, id_card_dir)
         try:
-            image = cv2.imread(path)
+            image = cv2.imread(known_faces_dir + filename)
             if image is None:
-                print(f"⚠️ Could not read image: {path}")
+                print(f"⚠️ Could not read image: {known_faces_dir + filename}")
                 continue
 
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            small_image = cv2.resize(rgb_image, (0, 0), fx=scale, fy=scale)
+            small_image = cv2.resize(rgb_image, fx=scale, fy=scale)
 
             encodings = face_recognition.face_encodings(small_image, num_jitters=1)
             if encodings:

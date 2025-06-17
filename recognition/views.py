@@ -1,5 +1,4 @@
 from django.shortcuts import render, redirect
-import face_recognition
 from face_recognition import face_encodings
 from .forms import PersonForm
 import io
@@ -10,6 +9,7 @@ import time
 import cv2
 from collections import defaultdict, deque
 from django.http import StreamingHttpResponse
+from .video_utils import start_video_capture, calculate_fps
 from .face_utils import (
     load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame, overlay_id_cards
 )
