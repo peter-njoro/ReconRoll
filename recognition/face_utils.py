@@ -50,20 +50,31 @@ def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
     Detect and encode all faces in an image
     Returns: face_locations, face_encodings
     """
-    small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale)
+    if scale != 1.0:
+        small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale)
+    else:
+        small_frame = image
+
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-    
+
+    # Early returns if no faces
     face_locations = face_recognition.face_locations(
         rgb_small_frame,
         number_of_times_to_upsample=1,
         model=model
     )
+
+    if not face_locations:
+        return [], []
     
     # Filter out small faces
     face_locations = [
         loc for loc in face_locations
         if (loc[2] - loc[0]) >= min_size and (loc[1] - loc[3]) >= min_size
     ]
+
+    if not face_locations:
+        return [], []
     
     face_encodings = []
     if face_locations:
@@ -73,7 +84,12 @@ def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
             num_jitters=1
         )
     
-    return face_locations, face_encodings
+    return face_locations, face_recognition.face_encodings(
+        rgb_small_frame,
+        face_locations,
+        num_jitters=1,
+        model='small'
+    )
 
 def matches_face_encoding(encoding, known_encodings, known_names, tolerance=0.5):
     """
@@ -95,36 +111,36 @@ def annotate_frame(frame, face_locations, face_names, scale=0.25):
     Draw rectangles and names on the frame
     Returns: annotated frame
     """
-    for (top, right, bottom, left), name in zip(face_locations, face_names):
+    for (top, right, bottom, left), label in zip(face_locations, face_names):
         top, right, bottom, left = [int(coord / scale) for coord in (top, right, bottom, left)]
-        color = (0, 255, 0) if name != "unknown" else (0, 0, 255)
+        color = (0, 255, 0) if "unknown" not in label.lower() else (0, 0, 255)
 
         cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
-        cv2.putText(frame, name.split()[0], (left + 6, bottom - 6),
+        cv2.putText(frame, label, (left + 6, bottom - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     
     return frame
 
-def overlay_id_cards(frame, recognized_faces, id_card_cache, scale=0.25, display_duration=10):
-    """
-    Overlay ID card next to recognized faces (modifies frame in-place)
-    """
-    for name, (last_frame, face_location) in recognized_faces.items():
-        if frame_count - last_frame < display_duration and name in id_card_cache:
-            top, right, bottom, left = [int(coord / scale) for coord in face_location]
-            face_width = right - left
-            face_height = bottom - top
-
-            idcard_resized = cv2.resize(id_card_cache[name], (face_width, face_height))
-            
-            x_start = right
-            x_end = right + face_width
-            y_start = top
-            y_end = top + face_height
-            
-            if x_end <= frame.shape[1] and y_end <= frame.shape[0]:
-                frame[y_start:y_end, x_start:x_end] = idcard_resized
+# def overlay_id_cards(frame, recognized_faces, id_card_cache, scale=0.25, display_duration=10):
+#     """
+#     Overlay ID card next to recognized faces (modifies frame in-place)
+#     """
+#     for name, (last_frame, face_location) in recognized_faces.items():
+#         if frame_count - last_frame < display_duration and name in id_card_cache:
+#             top, right, bottom, left = [int(coord / scale) for coord in face_location]
+#             face_width = right - left
+#             face_height = bottom - top
+#
+#             idcard_resized = cv2.resize(id_card_cache[name], (face_width, face_height))
+#
+#             x_start = right
+#             x_end = right + face_width
+#             y_start = top
+#             y_end = top + face_height
+#
+#             if x_end <= frame.shape[1] and y_end <= frame.shape[0]:
+#                 frame[y_start:y_end, x_start:x_end] = idcard_resized
 # 🛠 Suggested Tweaks
 # GPU Acceleration: Consider using dlib with CUDA or switching to face_recognition + ONNX models.
 #
