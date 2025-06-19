@@ -12,36 +12,52 @@ def load_known_faces(known_faces_dir, id_card_dir, scale=0.5):
     known_face_encodings = []
     known_face_names = []
     id_card_cache = {}
-    
-    for filename in sorted(os.listdir(known_faces_dir)):
-        if not filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-            continue
 
-        known_face_encodings, known_face_names, id_card_cache = load_known_faces(known_faces_dir, id_card_dir)
+    image_files = [f for f in os.listdir(known_faces_dir)
+                   if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+
+    print(f"Found {len(image_files)} image files to process")
+
+    for i, filename in enumerate(sorted(image_files), 1):
+        path = os.path.join(known_faces_dir, filename)
+        print(f"\nProcessing {i}/{len(image_files)}: {filename}")
+
         try:
-            image = cv2.imread(known_faces_dir + filename)
+            print("   Loading image...", end=' ', flush=True)
+            image = cv2.imread(path)
             if image is None:
-                print(f"⚠️ Could not read image: {known_faces_dir + filename}")
+                print("⚠️ Failed to load")
                 continue
+            print("✅ Loaded")
 
+            # Debug face detection
+            print("  Detecting face...", end=' ', flush=True)
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            small_image = cv2.resize(rgb_image, fx=scale, fy=scale)
-
+            small_image =cv2.resize(rgb_image, (0, 0), fx=scale, fy=scale)
             encodings = face_recognition.face_encodings(small_image, num_jitters=1)
+
             if encodings:
+                print(f"✅ Found {len(encodings)} face(s)")
                 known_face_encodings.append(encodings[0])
                 name = os.path.splitext(filename)[0].capitalize()
                 known_face_names.append(name)
 
+                # Debug ID card loading
                 idcard_path = os.path.join(id_card_dir, f'ID_{name}.jpg')
                 if os.path.exists(idcard_path):
+                    print("   Loading ID card...", end=' ', flush=True)
                     id_card = cv2.imread(idcard_path)
-                    id_card_cache[name] = cv2.resize(id_card, (200, 250))
-                print(f"✅ Loaded: {name}")
-            else:
-                print(f"⚠️ No face detected in: {path}")
+                    if id_card is not None:
+                        id_card_cache[name] = cv2.resize(id_card, (200, 250))
+                        print("✅ Loaded")
+                    else:
+                        print("⚠️ Failed to load")
+
+                else:
+                    print("⚠️ No faces detected")
         except Exception as e:
-            print(f"⚠️ Error processing {path}: {str(e)}")
+            print(f"⚠️ Error: {str(e)}")
+
 
     return np.array(known_face_encodings), known_face_names, id_card_cache
 
