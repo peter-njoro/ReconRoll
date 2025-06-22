@@ -5,10 +5,6 @@ import face_recognition
 from collections import defaultdict, deque
 
 def load_known_faces(known_faces_dir, id_card_dir, scale=0.5):
-    """
-    Load all known face images and ID cards into memory
-    Returns: encodings, names, id_card_cache
-    """
     known_face_encodings = []
     known_face_names = []
     id_card_cache = {}
@@ -56,12 +52,7 @@ def load_known_faces(known_faces_dir, id_card_dir, scale=0.5):
 
     return np.array(known_face_encodings), known_face_names, id_card_cache
 
-
 def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
-    """
-    Detect and encode all faces in an image
-    Returns: face_locations, face_encodings
-    """
     small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale) if scale != 1.0 else image
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
@@ -87,12 +78,7 @@ def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
 
     return face_locations, face_encodings
 
-
 def matches_face_encoding(encoding, known_encodings, known_names, tolerance=0.5):
-    """
-    Match a single face encoding to known ones
-    Returns: name, best_distance, best_match_index
-    """
     if not known_encodings.any():
         return "unknown", float("inf"), -1
 
@@ -103,37 +89,25 @@ def matches_face_encoding(encoding, known_encodings, known_names, tolerance=0.5)
     name = known_names[best_match_index] if best_distance <= tolerance else "unknown"
     return name, best_distance, best_match_index
 
-
 def annotate_frame(frame, face_locations, face_names, face_encodings=None, scale=0.25):
-    """
-    Draw rectangles, names, and encoding snippets on the frame
-    Returns: annotated frame
-    """
     for i, ((top, right, bottom, left), name) in enumerate(zip(face_locations, face_names)):
-        # Rescale coordinates
         top, right, bottom, left = [int(coord / scale) for coord in (top, right, bottom, left)]
         color = (0, 255, 0) if name != "unknown" else (0, 0, 255)
 
-        # Draw box and name
         cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
         cv2.rectangle(frame, (left, bottom - 35), (right, bottom), color, cv2.FILLED)
 
-        display_text = name.split()[0]
+        label = name
         if face_encodings is not None and i < len(face_encodings):
-            encoding_preview = ', '.join(f"{x:.2f}" for x in face_encodings[i][:3])
-            display_text += f" [{encoding_preview}...]"
+            preview = ', '.join(f"{x:.2f}" for x in face_encodings[i][:3])
+            label += f" [{preview}...]"
 
-        cv2.putText(frame, display_text, (left + 6, bottom - 6),
+        cv2.putText(frame, label, (left + 6, bottom - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-
-        if face_encodings is not None and i < len(face_encodings):
-            visualize_encoding(frame, face_encodings[i], (right + 10, top))
 
     return frame
 
-
 def visualize_encoding(frame, encoding, position, width=200, height=100):
-    """Alternative bar graph style visualization"""
     x, y = position
     vis_img = np.zeros((height, width, 3), dtype=np.uint8)
 
@@ -154,29 +128,25 @@ def visualize_encoding(frame, encoding, position, width=200, height=100):
     cv2.putText(frame, "Encoding Values:", (x, y - 5),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-
-def safe_load_dnn_model(config_path, model_path):
+def safe_load_dnn_model():
+    config_path = os.path.join("models", "deploy.prototxt")
+    model_path = os.path.join("models", "res10_300x300_ssd_iter_140000.caffemodel")
     net = cv2.dnn.readNetFromCaffe(config_path, model_path)
 
-    # Check if CUDA is available
     try:
         net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
         net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-
-        # Try a dry forward pass with dummy input to validate
+        # Dry test to validate CUDA compatibility
         dummy = cv2.dnn.blobFromImage(np.zeros((300, 300, 3), dtype=np.uint8))
         net.setInput(dummy)
         _ = net.forward()
-
         print("🚀 CUDA is available and working")
-    except Exception as e:
-        print("⚠️ CUDA not available or failed. Falling back to CPU.")
+    except:
         net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
         net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+        print("⚠️ CUDA not available. Falling back to CPU")
 
     return net
-
-        
 # def overlay_id_cards(frame, recognized_faVces, id_card_cache, scale=0.25, display_duration=10):
 #     """
 #     Overlay ID card next to recognized faces (modifies frame in-place)
