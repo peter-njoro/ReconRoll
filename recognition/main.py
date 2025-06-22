@@ -1,5 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
-import queue
+import os
 import cv2
 import time
 import numpy as np
@@ -19,46 +18,13 @@ min_face_size = 60
 min_confidence = 0.5
 
 # -----------------------------
-# ✅ Thread-safe queues
-# -----------------------------
-frame_queue = queue.Queue(maxsize=2)
-result_queue = queue.Queue(maxsize=2)
-
-
-def processing_worker():
-    while True:
-        frame = frame_queue.get()
-        if frame is None:  # Exit signal
-            break
-
-        face_locations = detect_faces_dnn(frame, net, min_confidence)
-        if face_locations:
-            _, face_encodings = get_face_encodings(frame, model='hog',
-                                                   scale=scale_factor,
-                                                   min_size=min_face_size)
-            if face_encodings:
-                results = []
-                for face_encoding in face_encodings:
-                    name, distance, _ = matches_face_encoding(
-                        face_encoding, known_face_encodings,
-                        known_face_names, tolerance
-                    )
-                    results.append((name, face_encoding))
-                result_queue.put((face_locations, results))
-        else:
-            result_queue.put(([], []))
-
-
-# Start processing thread
-executor = ThreadPoolExecutor(max_workers=1)
-future = executor.submit(processing_worker)
-# -----------------------------
 # ✅ Load known faces
 # -----------------------------
 print("🔄 Loading known face images...")
 known_face_encodings, known_face_names, _ = load_known_faces(
     known_faces_dir, '', scale=scale_factor  # Empty string for id_card_dir
 )
+
 # -----------------------------
 # ✅ Load DNN face detector
 # -----------------------------
@@ -95,6 +61,7 @@ prev_time = time.time()
 fps_history = []
 recognition_history = deque(maxlen=10)
 
+
 print("📷 Starting webcam - Press 'q' to quit...")
 
 while cap.isOpened():
@@ -105,19 +72,11 @@ while cap.isOpened():
 
     frame_count += 1
     frame = cv2.flip(frame, 1)
-
-    # Non-blocking frame submission
-    if frame_queue.qsize() < 2:
-        frame_queue.put(frame.copy())
-
-    try:
-        face_locations, recognition_results = result_queue.get_nowait()
-        face_names = [r[0] for r in recognition_results]
-        face_encodings_display = [r[1] for r in recognition_results]
-    except queue.Empty:
-        face_locations, face_names, face_encodings_display = [], [], []
-
     process_this_frame = frame_count % process_every_n_frames == 0
+
+    face_locations = []
+    face_names = []
+    face_encodings_display = []
 
     if process_this_frame:
         face_locations = detect_faces_dnn(frame, net, conf_threshold=min_confidence)
@@ -171,7 +130,5 @@ while cap.isOpened():
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-frame_queue.put(None)
-future.result()
 cap.release()
 cv2.destroyAllWindows()

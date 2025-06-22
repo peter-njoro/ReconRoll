@@ -1,87 +1,67 @@
-import threading
 import os
 import cv2
 import numpy as np
 import face_recognition
 from collections import defaultdict, deque
 
-_KNOWN_FACES_CACHE = None
-_CACHE_LOCK = threading.Lock()
+def load_known_faces(known_faces_dir, id_card_dir, scale=0.5):
+    known_face_encodings = []
+    known_face_names = []
+    id_card_cache = {}
 
-def load_known_faces(known_faces_dir, id_card_dir, scale=0.5, use_cache=True):
-    global _KNOWN_FACES_CACHE
+    image_files = [f for f in os.listdir(known_faces_dir)
+                   if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
-    if use_cache and _KNOWN_FACES_CACHE is not None:
-        return _KNOWN_FACES_CACHE
+    print(f"📁 Found {len(image_files)} image files in {known_faces_dir}")
 
-    with _CACHE_LOCK:
-        known_face_encodings = []
-        known_face_names = []
-        id_card_cache = {}
+    for i, filename in enumerate(sorted(image_files), 1):
+        path = os.path.join(known_faces_dir, filename)
+        print(f"\n[{i}/{len(image_files)}] Processing: {filename}")
 
-        image_files = [f for f in os.listdir(known_faces_dir)
-                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        try:
+            image = cv2.imread(path)
+            if image is None:
+                print("   ⚠️ Could not read image")
+                continue
 
-        print(f"📁 Found {len(image_files)} image files in {known_faces_dir}")
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            small_image = cv2.resize(rgb_image, (0, 0), fx=scale, fy=scale)
+            encodings = face_recognition.face_encodings(small_image, num_jitters=1)
 
-        for i, filename in enumerate(sorted(image_files), 1):
-            path = os.path.join(known_faces_dir, filename)
-            print(f"\n[{i}/{len(image_files)}] Processing: {filename}")
+            if encodings:
+                print(f"   ✅ Found {len(encodings)} face(s)")
+                known_face_encodings.append(encodings[0])
+                name = os.path.splitext(filename)[0].capitalize()
+                known_face_names.append(name)
 
-            try:
-                image = cv2.imread(path)
-                if image is None:
-                    print("   ⚠️ Could not read image")
-                    continue
-
-                rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-                small_image = cv2.resize(rgb_image, (0, 0), fx=scale, fy=scale)
-                encodings = face_recognition.face_encodings(small_image, num_jitters=1)
-
-                if encodings:
-                    print(f"   ✅ Found {len(encodings)} face(s)")
-                    known_face_encodings.append(encodings[0])
-                    name = os.path.splitext(filename)[0].capitalize()
-                    known_face_names.append(name)
-
-                    idcard_path = os.path.join(id_card_dir, f'ID_{name}.jpg')
-                    if os.path.exists(idcard_path):
-                        id_card = cv2.imread(idcard_path)
-                        if id_card is not None:
-                            id_card_cache[name] = cv2.resize(id_card, (200, 250))
-                            print("   🪪 ID card loaded")
-                        else:
-                            print("   ⚠️ Failed to load ID card image")
+                idcard_path = os.path.join(id_card_dir, f'ID_{name}.jpg')
+                if os.path.exists(idcard_path):
+                    id_card = cv2.imread(idcard_path)
+                    if id_card is not None:
+                        id_card_cache[name] = cv2.resize(id_card, (200, 250))
+                        print("   🪪 ID card loaded")
                     else:
-                        print("   ⚠️ ID card not found")
+                        print("   ⚠️ Failed to load ID card image")
                 else:
-                    print("   ⚠️ No face detected")
+                    print("   ⚠️ ID card not found")
+            else:
+                print("   ⚠️ No face detected")
 
-            except Exception as e:
-                print(f"   ❌ Error: {str(e)}")
+        except Exception as e:
+            print(f"   ❌ Error: {str(e)}")
 
-        result =  (np.array(known_face_encodings), known_face_names, id_card_cache)
-
-        if use_cache:
-            _KNOWN_FACES_CACHE = result
-        return result
-
+    return np.array(known_face_encodings), known_face_names, id_card_cache
 
 def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
-    if image is None or image.size == 0:
-        return [], []
+    small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale) if scale != 1.0 else image
+    rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-    # Use grayscale for faster processing (if color not needed)
-    if model == 'hog':
-        small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale)
-        gray_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
-        face_locations = face_recognition.face_locations(gray_frame, model=model)
-    else:
-        small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale)
-        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-        face_locations = face_recognition.face_locations(rgb_small_frame, model=model)
+    face_locations = face_recognition.face_locations(
+        rgb_small_frame,
+        number_of_times_to_upsample=1,
+        model=model
+    )
 
-    # Filter small faces
     face_locations = [
         loc for loc in face_locations
         if (loc[2] - loc[0]) >= min_size and (loc[1] - loc[3]) >= min_size
@@ -90,13 +70,10 @@ def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
     if not face_locations:
         return [], []
 
-    # Only convert to RGB when needed for encodings
-    rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
     face_encodings = face_recognition.face_encodings(
         rgb_small_frame,
         face_locations,
-        num_jitters=1,
-        model='small'  # Faster model
+        num_jitters=1
     )
 
     return face_locations, face_encodings
