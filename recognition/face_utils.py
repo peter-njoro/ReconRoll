@@ -153,6 +153,29 @@ def visualize_encoding(frame, encoding, position, width=200, height=100):
 
     cv2.putText(frame, "Encoding Values:", (x, y - 5),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+
+def safe_load_dnn_model(config_path, model_path):
+    net = cv2.dnn.readNetFromCaffe(config_path, model_path)
+
+    # Check if CUDA is available
+    try:
+        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+
+        # Try a dry forward pass with dummy input to validate
+        dummy = cv2.dnn.blobFromImage(np.zeros((300, 300, 3), dtype=np.uint8))
+        net.setInput(dummy)
+        _ = net.forward()
+
+        print("🚀 CUDA is available and working")
+    except Exception as e:
+        print("⚠️ CUDA not available or failed. Falling back to CPU.")
+        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+
+    return net
+
         
 # def overlay_id_cards(frame, recognized_faVces, id_card_cache, scale=0.25, display_duration=10):
 #     """

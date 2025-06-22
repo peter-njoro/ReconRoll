@@ -5,7 +5,8 @@ import numpy as np
 from face_utils import (
     load_known_faces,
     matches_face_encoding,
-    annotate_frame
+    annotate_frame,
+    safe_load_dnn_model
 )
 from video_utils import start_video_capture, calculate_fps
 import face_recognition
@@ -18,22 +19,13 @@ target_fps = 30
 process_every_n_frames = 3
 min_confidence = 0.6
 min_face_size = 60
-model_path = "/models/res10_300x300_ssd_iter_140000.caffemodel"
-config_path = "/models/deploy.prototxt"
+config_path = "models/deploy.prototxt"
+model_path = "models/res10_300x300_ssd_iter_140000.caffemodel"
 window_title = 'Face Recognition - DNN Detection'
 
 # -------------------- Load DNN Model --------------------
 print("⚙️ Loading DNN face detector...")
-net = cv2.dnn.readNetFromCaffe(config_path, model_path)
-
-try:
-    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-    print("🚀 Using GPU for inference (CUDA)")
-except:
-    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-    print("⚠️ CUDA not available. Using CPU instead.")
+net = safe_load_dnn_model(config_path, model_path)
 
 # -------------------- Load Known Faces --------------------
 print("🔄 Loading known face images...")
