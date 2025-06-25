@@ -11,7 +11,7 @@ from collections import defaultdict, deque
 from django.http import StreamingHttpResponse
 from .video_utils import start_video_capture, calculate_fps
 from .face_utils import (
-    load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame, overlay_id_cards
+    load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame
 )
 
 # Constants to be transfered to settings.py or a config file
