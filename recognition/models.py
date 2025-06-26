@@ -4,19 +4,26 @@ from django.contrib.auth.models import User
 
 # Create your models here.
 
-class Person(models.Model):
-    name = models.CharField(max_length=100)
-    image = models.ImageField(upload_to='recognition/uploads/faces/', blank=True, null=True)
-    face_encoding = models.BinaryField() # store the image as binary bites
+class Student(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    full_name = models.CharField(max_length=100)
+    registration_number = models.CharField(max_length=50, unique=True)
+    email = models.EmailField(max_length=254, unique=True, blank=True)
+    course = models.CharField(max_length=100, blank=True)
+    year_of_study = models.PositiveIntegerField(default=1)
+    face_encoding_path = models.CharField(max_length=255, blank=True, help_text="Path to saced face encoding file if used.")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.full_name} ({self.registration_number})"
+    
 
 
 class AttendanceRecord(models.Model):
-    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    session = models.ForeignKey('Session', related_name='attendance_records', on_delete=models.CASCADE)
     timestamp = models.DateTimeField(auto_now_add=True)
-
+    source_event = models.ForeignKey('Event', related_name='attendance_records', on_delete=models.SET_NULL, null=True, blank=True)
 class Session(models.Model):
     SESSION_STATUS_CHOICES = [
         ('ongoing', 'Ongoing'),
