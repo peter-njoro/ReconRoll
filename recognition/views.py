@@ -1,18 +1,21 @@
-from django.shortcuts import render, redirect
-from face_recognition import face_encodings
-from .forms import PersonForm
-import io
-import pickle
 import os
-from django.conf import settings
 import time
 import cv2
-from collections import defaultdict, deque
+import uuid
+import numpy as np
+import io
+import pickle
+from django.conf import settings
+from django.shortcuts import render, redirect
 from django.http import StreamingHttpResponse
+from .forms import StudentForm
 from .video_utils import start_video_capture, calculate_fps
 from .face_utils import (
     load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame
 )
+from face_recognition import face_encodings
+from collections import defaultdict, deque
+
 
 # Constants to be transfered to settings.py or a config file
 KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
@@ -39,28 +42,34 @@ def index(request):
 def enroll_view(request):
     # to get multiple images for enrollment in json formart or CSV formart as python script needs to be written here for this.
     if request.method == 'POST':
-        form = PersonForm(request.POST, request.FILES)
+        form = StudentForm(request.POST, request.FILES)
         if form.is_valid():
-            person = form.save(commit=False)
-            image_path = request.FILES['image'].temporary_file_path() \
-                if hasattr(request.FILES['image'], 'temporary_file_path') else None
+            student = form.save(commit=False)
+            image = request.FILES['face_image']
+            img_bytes = image.read()
+            np_arr = np.frombuffer(img_bytes, np.uint8)
+            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-            if not image_path:
-                # use BytesIO to handle in-memory files
-                img_bytes = request.FILES['image'].read()
-                image_path = io.BytesIO(img_bytes)
-
-            encoding = encode_face(image_path)
-
-            if encoding is not None:
-                person.encoding = pickle.dumps(encoding)
-                person.save()
-                return redirect('recognition:enroll_success')
+            # Encode face
+            face_locations, encodings= get_face_encodings(img)
+            if not encodings:
+                form.add_error('face_image', 'No face_detected in the upload image.')
             else:
-                form.add_error(None, 'No face detected. Try another image.')
+                # Use the first encoding
+                encoding = encodings[0]
 
+                # Save encoding as .npy
+                filename = f"{uuid.uuid4()}.npy"
+                path = os.path.join('recognition/uploads/faces', filename)
+                abs_path = os.path.join(settings.BASE_DIR, path)
+                np.save(abs_path, encoding)
+
+                student.face_encoding_path = path
+                student.save()
+                return redirect('recognition:enroll_success')
+            
     else:
-        form = PersonForm()
+        form = StudentForm()
 
     context = {
         'form':form

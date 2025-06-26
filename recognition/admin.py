@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Session, Event, Student
+from .models import Session, Event, Student, AttendanceRecord
 # Register your models here.
 
 @admin.register(Session)
@@ -19,4 +19,9 @@ class StudentAdmin(admin.ModelAdmin):
     list_display = ('full_name', 'registration_number', 'email', 'course', 'year_of_study')
     search_fields = ('full_name', 'registration_number', 'email')
     list_filter = ('course', 'year_of_study')
-    
+
+@admin.register(AttendanceRecord)
+class AttendanceRecordAdmin(admin.ModelAdmin):
+    list_display = ('student', 'session', 'timestamp', 'source', 'is_late')
+    list_filter = ('source', 'is_late')
+    search_fields = ('student__full_name', 'session__subject')

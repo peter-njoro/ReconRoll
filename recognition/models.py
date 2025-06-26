@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils.timezone import now
 
 # Create your models here.
 
@@ -20,10 +21,26 @@ class Student(models.Model):
 
 
 class AttendanceRecord(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    ATTENDANCE_SOURCE_CHOICES = [
+        ('auto', 'Auto Face Recognition'),
+        ('manual', 'Manual Marking'),
+        ('override', 'Developer Override'),
+    ]
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='attendance_entries')
     session = models.ForeignKey('Session', related_name='attendance_records', on_delete=models.CASCADE)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    source_event = models.ForeignKey('Event', related_name='attendance_records', on_delete=models.SET_NULL, null=True, blank=True)
+    timestamp = models.DateTimeField(default=now)
+    source = models.CharField(max_length=20, choices=ATTENDANCE_SOURCE_CHOICES, default='auto')
+    source_event = models.ForeignKey('Event', on_delete=models.SET_NULL, null=True, blank=True)
+    is_late = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('student', 'student')
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.session.subject} - {self.timestamp.strftime('%H:%M:%S')}"
+    
 class Session(models.Model):
     SESSION_STATUS_CHOICES = [
         ('ongoing', 'Ongoing'),
