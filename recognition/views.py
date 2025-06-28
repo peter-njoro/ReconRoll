@@ -54,6 +54,8 @@ def enroll_view(request):
             face_locations, encodings= get_face_encodings(img)
             if not encodings:
                 form.add_error('face_image', 'No face_detected in the upload image.')
+            elif len(encodings) > 1:
+                form.add_error('face_image', 'Multiple faces detected in the upload image. Please upload an image with a single face.')
             else:
                 # Use the first encoding
                 encoding = encodings[0]
