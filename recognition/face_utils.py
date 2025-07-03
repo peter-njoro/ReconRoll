@@ -147,28 +147,3 @@ def safe_load_dnn_model():
         print("⚠️ CUDA not available. Falling back to CPU")
 
     return net
-# def overlay_id_cards(frame, recognized_faVces, id_card_cache, scale=0.25, display_duration=10):
-#     """
-#     Overlay ID card next to recognized faces (modifies frame in-place)
-#     """
-#     for name, (last_frame, face_location) in recognized_faces.items():
-#         if frame_count - last_frame < display_duration and name in id_card_cache:
-#             top, right, bottom, left = [int(coord / scale) for coord in face_location]
-#             face_width = right - left
-#             face_height = bottom - top
-       
-#             idcard_resized = cv2.resize(id_card_cache[name], (face_width, face_height))
-
-#             x_start = right
-#             x_end = right + face_width
-#             y_start = top
-#             y_end = top + face_height
-
-#             if x_end <= frame.shape[1] and y_end <= frame.shape[0]:
-#                 frame[y_start:y_end, x_start:x_end] = idcard_resized
-# 🛠 Suggested Tweaks
-# GPU Acceleration: Consider using dlib with CUDA or switching to face_recognition + ONNX models.
-#
-# Multi-threading: Move webcam capture to a separate thread to decouple UI from detection.
-#
-# Confidence Display: Show distance (or confidence) score under name box.

@@ -13,6 +13,7 @@ from .video_utils import start_video_capture, calculate_fps
 from .face_utils import (
     load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame
 )
+from .models import FaceEncoding
 from face_recognition import face_encodings
 from collections import defaultdict, deque
 
@@ -61,10 +62,17 @@ def enroll_view(request):
                 encoding = encodings[0]
 
                 # Save encoding as .npy
-                filename = f"{uuid.uuid4()}.npy"
-                path = os.path.join('recognition/uploads/faces', filename)
-                abs_path = os.path.join(settings.BASE_DIR, path)
-                np.save(abs_path, encoding)
+                for i, encoding in enumerate(encodings):
+                    filename = f"{uuid.uuid4()}.npy"
+                    path = os.path.join('recognition/uploads/faces', filename)
+                    abs_path = os.path.join(settings.BASE_DIR, path)
+                    np.save(abs_path, encoding)
+
+                    FaceEncoding.objects.create(
+                        student=student,
+                        file_path=path,
+                        notes=f"Enrollment encoding {i+1} for {student.full_name} via enrollment view."
+                    )
 
                 student.face_encoding_path = path
                 student.save()
@@ -136,7 +144,6 @@ def generate_face_stream():
 
         # Annotate frame with face boxes and names
         frame = annotate_frame(frame, face_locations, face_names, scale=SCALE_FACTOR)
-        overlay_id_cards(frame, recognized_faces, id_card_cache, scale=SCALE_FACTOR, display_duration=CARD_DISPLAY_FRAMES)
 
         # Display FPS AND FACE COUNT
         fps, fps_history, prev_time = calculate_fps(prev_time, fps_history)

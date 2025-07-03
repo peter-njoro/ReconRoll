@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Session, Event, Student, AttendanceRecord
+from .models import Session, Event, Student, AttendanceRecord, FaceEncoding
 # Register your models here.
 
 @admin.register(Session)
@@ -25,3 +25,8 @@ class AttendanceRecordAdmin(admin.ModelAdmin):
     list_display = ('student', 'session', 'timestamp', 'source', 'is_late')
     list_filter = ('source', 'is_late')
     search_fields = ('student__full_name', 'session__subject')
+    
+@admin.register(FaceEncoding)
+class FaceEncodingAdmin(admin.ModelAdmin):
+    list_display = ('student', 'file_path', 'created_at')
+    search_fields = ('student__full_name',)

@@ -12,8 +12,6 @@ class Student(models.Model):
     email = models.EmailField(max_length=254, unique=True, blank=True)
     course = models.CharField(max_length=100, blank=True)
     year_of_study = models.PositiveIntegerField(default=1)
-    face_encoding_path = models.CharField(max_length=255, blank=True, help_text="Path to saced face encoding file if used.")
-    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.full_name} ({self.registration_number})"
@@ -84,3 +82,12 @@ class Event(models.Model):
     def __str__(self):
         return f"{self.event_type} @ {self.timestamp.strftime('%H:%M:%S')} ({self.session.subject})"
     
+class FaceEncoding(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='encodings')
+    file_path = models.CharField(max_length=255, help_text="Path to the .npy file containing the face encoding.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True, help_text="Optional notes about this encoding.")
+
+    def __str__(self):
+        return f"Encoding for {self.student.full_name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
