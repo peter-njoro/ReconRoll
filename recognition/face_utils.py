@@ -2,7 +2,25 @@ import os
 import cv2
 import numpy as np
 import face_recognition
+from recognition.models import Student, FaceEncoding
+from django.conf import settings
 from collections import defaultdict, deque
+
+def load_known_encodings_from_db():
+    known_encodings = []
+    known_names = []
+
+    for student in Student.objects.all():
+        for encoding_obj in student.encodings.all():
+            path = os.path.join(settings.BASE_DIR, encoding_obj.file_path)
+            try:
+                encoding = np.load(path)
+                known_encodings.append(encoding)
+                known_names.append(student.full_name)
+            except Exception as e:
+                print(f"Failed to load encoding for {student.full_name}: {e}")
+
+    return np.array(known_encodings), known_names
 
 def load_known_faces(known_faces_dir, id_card_dir, scale=0.5):
     known_face_encodings = []

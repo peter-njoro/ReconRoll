@@ -41,28 +41,31 @@ def index(request):
     return render(request, 'recognition/index.html', context)
 
 def enroll_view(request):
-    # to get multiple images for enrollment in json formart or CSV formart as python script needs to be written here for this.
     if request.method == 'POST':
-        form = StudentForm(request.POST, request.FILES)
+        form = StudentForm(request.POST)
+        face_images = request.FILES.getlist('face_images')
+
         if form.is_valid():
-            student = form.save(commit=False)
-            image = request.FILES['face_image']
-            img_bytes = image.read()
-            np_arr = np.frombuffer(img_bytes, np.uint8)
-            img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-            # Encode face
-            face_locations, encodings= get_face_encodings(img)
-            if not encodings:
-                form.add_error('face_image', 'No face_detected in the upload image.')
-            elif len(encodings) > 1:
-                form.add_error('face_image', 'Multiple faces detected in the upload image. Please upload an image with a single face.')
+            if not face_images:
+                form.add_error(None, 'Please upload at least one image file.')
             else:
-                # Use the first encoding
-                encoding = encodings[0]
+                student = form.save()
+                success_count = 0
 
-                # Save encoding as .npy
-                for i, encoding in enumerate(encodings):
+                for image in face_images:
+                    img_bytes = image.read()
+                    np_arr = np.frombuffer(img_bytes, np.uint8)
+                    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+                    face_locations, encodings = get_face_encodings(img)
+                    if not encodings:
+                        form.add_error(None, f"No face detected in image: {image.name}")
+                        continue
+                    elif len(encodings) > 1:
+                        form.add_error(None, f"Multiple faces detected in image: {image.name}")
+                        continue
+
+                    encoding = encodings[0]
                     filename = f"{uuid.uuid4()}.npy"
                     path = os.path.join('recognition/uploads/faces', filename)
                     abs_path = os.path.join(settings.BASE_DIR, path)
@@ -71,20 +74,18 @@ def enroll_view(request):
                     FaceEncoding.objects.create(
                         student=student,
                         file_path=path,
-                        notes=f"Enrollment encoding {i+1} for {student.full_name} via enrollment view."
+                        notes=f"Encoding from {image.name}"
                     )
+                    success_count += 1
 
-                student.face_encoding_path = path
-                student.save()
-                return redirect('recognition:enroll_success')
-            
+                if success_count > 0:
+                    return redirect('recognition:enroll_success')
+                else:
+                    form.add_error(None, 'No valid encodings saved.')
     else:
         form = StudentForm()
 
-    context = {
-        'form':form
-    }
-    return render(request, 'recognition/enroll.html', context)
+    return render(request, 'recognition/enroll.html', {'form': form})
 
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')

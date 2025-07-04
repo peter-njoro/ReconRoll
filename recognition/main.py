@@ -1,8 +1,19 @@
 import os
+import django
+import sys
 import cv2
 import time
 import numpy as np
-from face_utils import load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame, safe_load_dnn_model
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
+
+from face_utils import (
+    get_face_encodings, matches_face_encoding,
+    annotate_frame, safe_load_dnn_model,
+    load_known_encodings_from_db
+)
 from video_utils import start_video_capture, calculate_fps
 from collections import deque
 
@@ -21,9 +32,12 @@ min_confidence = 0.5
 # ✅ Load known faces
 # -----------------------------
 print("🔄 Loading known face images...")
-known_face_encodings, known_face_names, _ = load_known_faces(
-    known_faces_dir, '', scale=scale_factor  # Empty string for id_card_dir
-)
+# known_face_encodings, known_face_names, _ = load_known_faces(
+#     known_faces_dir, '', scale=scale_factor
+# )
+print("🔄 Loading known face encodings from database...")
+known_face_encodings, known_face_names = load_known_encodings_from_db()
+
 
 # -----------------------------
 # ✅ Load DNN face detector
