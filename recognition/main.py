@@ -1,13 +1,23 @@
 import os
-import django
 import sys
 import cv2
 import time
 import numpy as np
+import django
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+# Set Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
-django.setup()
+try:
+    django.setup()
+except Exception as e:
+    print(f"🔥 Django setup failed: {e}")
+    exit(1)
+
 
 from face_utils import (
     get_face_encodings, matches_face_encoding,
