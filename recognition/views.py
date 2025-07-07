@@ -5,6 +5,7 @@ import uuid
 import numpy as np
 import io
 import pickle
+import face_recognition
 from django.conf import settings
 from django.shortcuts import render, redirect
 from django.http import StreamingHttpResponse
@@ -50,6 +51,7 @@ def enroll_view(request):
             form.add_error(None, 'Please upload at least one image file.')
 
         if form.is_valid():
+            ref_encoding = None
             valid_encodings = []
 
             for image in face_images:
@@ -65,6 +67,16 @@ def enroll_view(request):
                 elif len(encodings) > 1:
                     form.add_error(None, f"Multiple faces detected in image: {image.name}")
                     continue
+
+                encoding = encodings[0]
+
+                if ref_encoding is None:
+                    ref_encoding = encoding
+                else:
+                    matches = face_recognition.compare_faces([ref_encoding], encoding, tolerance=TOLERANCE)
+                    if not matches[0]:
+                        form.add_error(None, f"Face in image {image.name} does not match the first face.")
+                        continue
 
                 valid_encodings.append((image.name, encodings[0]))
 
