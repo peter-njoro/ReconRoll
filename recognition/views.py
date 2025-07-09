@@ -9,12 +9,12 @@ import face_recognition
 from django.conf import settings
 from django.shortcuts import render, redirect
 from django.http import StreamingHttpResponse
-from .forms import StudentForm
+from .forms import StudentForm, SessionForm
 from .video_utils import start_video_capture, calculate_fps
 from .face_utils import (
     load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame
 )
-from .models import FaceEncoding
+from .models import FaceEncoding, Session
 from face_recognition import face_encodings
 from collections import defaultdict, deque
 
@@ -110,6 +110,51 @@ def enroll_view(request):
 
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
+
+
+def start_session_view(request):
+    if request.method == 'POST':
+        form = SessionForm(request.POST)
+        if form.is_valid():
+            session = form.save(commit=False)
+            session.created_by = request.user
+            session.save()
+            # redirect to session detail page or list
+            return redirect('recognition:session_detail', session_id=session.id)
+        else:
+            form = SessionForm()
+
+        context = {
+            'form': form,
+        }
+        return render(request, 'recognition/start_session.html', context)
+
+def session_detail(request, session_id):
+    try:
+        session = Session.objects.get(id=session_id)
+    except Session.DoesNotExist:
+        return render(request, 'recognition/session_not_found.html', {'session_id': session_id})
+
+    # Fetch attendance records for this session
+    attendance_records = session.attendancerecord_set.all()
+
+    context = {
+        'session': session,
+        'attendance_records': attendance_records,
+    }
+    return render(request, 'recognition/session_detail.html', context)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def face_detection_page(request):

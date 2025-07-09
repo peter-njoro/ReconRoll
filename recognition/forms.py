@@ -1,5 +1,5 @@
 from django import forms
-from .models import Student
+from .models import Student, Session, ClassGroup
 
 
 class StudentForm(forms.ModelForm):
@@ -35,4 +35,23 @@ class StudentForm(forms.ModelForm):
             'email': 'Email',
             'course': 'Course',
             'year_of_study': 'Year of Study',
+        }
+
+class SessionForm(forms.ModelForm):
+    class Meta:
+        model = Session
+        fields = ['subject', 'class_group', 'notes']
+        widgets = {
+            'subject': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Session Subject'
+            }),
+            'class_group': forms.Select(attrs={
+                'class': 'form-control',
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'placeholder': 'Additional Notes',
+                'rows': 3
+            }),
         }
