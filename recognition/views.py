@@ -150,7 +150,7 @@ def generate_face_stream():
             )
 
             if face_encodings:
-                for face_encoding, face_location in zip(face_encogdings, face_locations):
+                for face_encoding, face_location in zip(face_encodings, face_locations):
                     name, distance, _ = matches_face_encoding(
                         face_encoding,
                         known_face_encodings,

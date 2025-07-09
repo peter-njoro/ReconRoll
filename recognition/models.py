@@ -52,6 +52,7 @@ class Session(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=SESSION_STATUS_CHOICES, default='ongoing')
     notes = models.TextField(blank=True, null=True)
+    class_group = models.ForeignKey('ClassGroup', on_delete=models.CASCADE, related_name='sessions', null=True, blank=True)
 
     def __str__(self):
         return f"{self.subject} | {self.start_time.strftime('%Y-%m-%d %H:%M')}"
@@ -91,3 +92,16 @@ class FaceEncoding(models.Model):
 
     def __str__(self):
         return f"Encoding for {self.student.full_name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+    
+class ClassGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    students = models.ManyToManyField('Student', related_name='class_groups')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    def student_count(self):
+        return self.students.count()
