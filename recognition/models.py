@@ -105,3 +105,8 @@ class ClassGroup(models.Model):
 
     def student_count(self):
         return self.students.count()
+
+class UnidentifiedFace(models.Model):
+    session = models.ForeignKey('Session', on_delete=models.CASCADE, related_name='unidentified_faces')
+    image_path = models.CharField(max_length=255)
+    timestamp = models.DateTimeField(auto_now_add=True)

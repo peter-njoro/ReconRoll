@@ -7,14 +7,14 @@ import io
 import pickle
 import face_recognition
 from django.conf import settings
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import StreamingHttpResponse
 from .forms import StudentForm, SessionForm
 from .video_utils import start_video_capture, calculate_fps
 from .face_utils import (
     load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame
 )
-from .models import FaceEncoding, Session
+from .models import FaceEncoding, Session, AttendanceRecord, Event
 from face_recognition import face_encodings
 from collections import defaultdict, deque
 
@@ -121,30 +121,41 @@ def start_session_view(request):
             session.save()
             # redirect to session detail page or list
             return redirect('recognition:session_detail', session_id=session.id)
-        else:
-            form = SessionForm()
+    else:
+        form = SessionForm()
 
         context = {
             'form': form,
         }
-        return render(request, 'recognition/start_session.html', context)
+    return render(request, 'recognition/start_session.html', context)
 
 def session_detail(request, session_id):
-    try:
-        session = Session.objects.get(id=session_id)
-    except Session.DoesNotExist:
-        return render(request, 'recognition/session_not_found.html', {'session_id': session_id})
+    session = get_object_or_404(Session, id=session_id)
 
-    # Fetch attendance records for this session
-    attendance_records = session.attendancerecord_set.all()
+    if session.class_group:
+        expected_students = session.class_group.students.all()
+    else:
+        from recognition.models import Student
+        expected_students = Student.objects.none()
+
+    present_records = AttendanceRecord.objects.filter(session=session)
+    present_students = [record.student for record in present_records]
+    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
+
+    unidentified_faces = session.unidentified_faces.all()
+    events = session.events.order_by('-timestamp')
 
     context = {
         'session': session,
-        'attendance_records': attendance_records,
+        'present_Students': present_students,
+        'absent_students': absent_students,
+        'unidentified_faces': unidentified_faces,
+        'events': events,
     }
     return render(request, 'recognition/session_detail.html', context)
 
-
+def record_event(session, message, event_type='info'):
+    Event.objects.create(session=session, message=message, event_type=event_type)
 
 
 
