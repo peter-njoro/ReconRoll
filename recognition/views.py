@@ -3,8 +3,6 @@ import time
 import cv2
 import uuid
 import numpy as np
-import io
-import pickle
 import face_recognition
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
@@ -156,89 +154,3 @@ def session_detail(request, session_id):
 
 def record_event(session, message, event_type='info'):
     Event.objects.create(session=session, message=message, event_type=event_type)
-
-
-
-
-
-
-
-
-
-
-
-
-def face_detection_page(request):
-    return render(request, 'recognition/face_detection.html')
-
-    # SHOW THE CARD IN THE WEB BROWSER, THE CAMERA LIVE FEED OPTION TO BE COMPLETELY OPTIONAl
-
-
-def live_recognition_page(request):
-    return render(request, 'recognition/live_recognition.html')
-
-
-def generate_face_stream():
-    cap = start_video_capture(fps=TARGET_FPS)
-    frame_count = 0
-    prev_time = time.time()
-    fps_history = []
-    recognized_faces = {}  # name -> (last seen frame index, face location)
-    recent_matches = defaultdict(lambda: deque(maxlen=5))
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        frame_count += 1
-        frame = cv2.flip(frame, 1)
-        process_this_frame = frame_count % PROCESS_EVERY_N_FRAMES == 0
-
-        face_locations, face_names = [], []
-
-        if process_this_frame:
-            face_loactions, face_encodings = get_face_encodings(
-                frame,
-                model='hog',
-                scale=SCALE_FACTOR,
-                min_size=MIN_FACE_SIZE
-            )
-
-            if face_encodings:
-                for face_encoding, face_location in zip(face_encodings, face_locations):
-                    name, distance, _ = matches_face_encoding(
-                        face_encoding,
-                        known_face_encodings,
-                        known_face_names,
-                        tolerance=TOLERANCE
-                    )
-
-                    if name != "unknown":
-                        recognized_faces[name] = (frame_count, face_location)
-                        recent_matches[name].append(frame_count)
-
-                    face_names.append(name)
-
-        # Annotate frame with face boxes and names
-        frame = annotate_frame(frame, face_locations, face_names, scale=SCALE_FACTOR)
-
-        # Display FPS AND FACE COUNT
-        fps, fps_history, prev_time = calculate_fps(prev_time, fps_history)
-        cv2.putText(frame, f'FPS: {int(fps)}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame, f'Faces: {len(face_locations)}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-        # eNCODE FRAME TO JPEG
-        _, jpeg = cv2.imencode('.jpg', frame)
-        yield(b'--frame\r\n'
-              b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n\r\n')
-        
-    cap.release()
-
-def live_face_recognition_stream(request):
-    return StreamingHttpResponse(generate_face_stream(), content_type='multipart/x-mixed-replace; boundary=frame')
-
-def live_face_recognition_page(request):
-    return render(request, 'recognition/live_recognition.html')
-    
-

@@ -2,8 +2,9 @@ import os
 import sys
 import cv2
 import time
-import numpy as np
+import argparse
 import django
+import numpy as np
 
 
 
@@ -18,6 +19,21 @@ except Exception as e:
     print(f"🔥 Django setup failed: {e}")
     exit(1)
 
+from recognition.models import Session
+
+# Parse args
+parser = argparse.ArgumentParser(description='Start face recognition for a session')
+parser.add_argument('--session-id', type=str, required=True, help='UUID of the session to use')
+parser.add_argument('--video', type=str, help='Path to video file (optional, for the recored video)')
+
+args = parser.parse_args()
+
+# Load the session
+try:
+    session = Session.objects.get(id=args.session_id)
+    print(f"✅ Loaded session: {session.subject} | Group: {session.class_group}")
+except Session.DoesNotExist:
+    print(f"❌ Session with id {args.session_id} not found.")
 
 from face_utils import (
     get_face_encodings, matches_face_encoding,
