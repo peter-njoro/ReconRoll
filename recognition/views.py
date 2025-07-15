@@ -1,20 +1,13 @@
 import os
-import time
 import cv2
 import uuid
 import numpy as np
 import face_recognition
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import StreamingHttpResponse
 from .forms import StudentForm, SessionForm
-from .video_utils import start_video_capture, calculate_fps
-from .face_utils import (
-    load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame
-)
+from .face_utils import get_face_encodings
 from .models import FaceEncoding, Session, AttendanceRecord, Event
-from face_recognition import face_encodings
-from collections import defaultdict, deque
 
 
 # Constants to be transfered to settings.py or a config file
