@@ -1,5 +1,6 @@
 import os
 import cv2
+import uuid
 import numpy as np
 import face_recognition
 from recognition.models import Student, FaceEncoding
@@ -97,3 +98,20 @@ def safe_load_dnn_model():
         print("⚠️ CUDA not available. Falling back to CPU")
 
     return net
+
+def save_unidentified_face(frame, face_location, base_dir='recognition/uploads/unidentified/'):
+    """
+    Crop face from frame & save to file; return relative path to save in DB
+    """
+    top, right, bottom, left = face_location
+    cropped = frame[top:bottom, left:right]
+    filename = f"{uuid.uuid4()}.jpg"
+    path = os.path.join(base_dir, filename)
+    abs_path = os.path.join(settings.BASE_DIR, path)
+    try:
+        cv2.imwrite(abs_path, cropped)
+        return path
+    except Exception as e:
+        print(f"❌ Failed to save unidentified face: {e}")
+        return None
+

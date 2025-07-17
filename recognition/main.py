@@ -1,10 +1,13 @@
 import os
 import sys
+import uuid
 import cv2
 import time
 import argparse
 import django
 import numpy as np
+from datetime import datetime
+
 
 
 
@@ -19,7 +22,7 @@ except Exception as e:
     print(f"🔥 Django setup failed: {e}")
     exit(1)
 
-from recognition.models import Session
+from recognition.models import Session, AttendanceRecord, FaceEncoding, Student, UnidentifiedFace, Event
 
 # Parse args
 parser = argparse.ArgumentParser(description='Start face recognition for a session')
@@ -130,9 +133,34 @@ while cap.isOpened():
                         face_encoding, known_face_encodings, known_face_names, tolerance
                     )
                     recognition_frame_info.append((name, face_encoding))
-                    print(f"[{time.strftime('%H:%M:%S')}] Detected: {name}")
-                    print(f"  Match Distance: {distance:.4f}")
-                    print(f"  Encoding Sample: {np.round(face_encoding[:5], 4)}\n")
+                    print(f"[{time.strftime('%H:%M:%S')}] Detected: {name} | Distance: {distance:.4f}")
+
+                    if name != "unknown":
+                        student = Student.objects.filter(full_name=name).first()
+                        if student:
+                            # Check if attendance already recorded
+                            if not AttendanceRecord.objects.filter(session=session, student=student).exists():
+                                AttendanceRecord.objects.create(session=session, student=student)
+                                Event.objects.create(
+                                    session=session,
+                                    event_type='face_recognized',
+                                    severity='info',
+                                    message=f"Student recognized: {student.full_name}"
+                                )
+                                print(f"✅ Attendance marked for {student.full_name}")
+                    else:
+                        # Save cropped face & log
+                        from face_utils import save_unidentified_face
+                        saved_path = save_unidentified_face(frame, face_locations[i])
+                        if saved_path:
+                            UnidentifiedFace.objects.create(session=session, image_path=saved_path)
+                            Event.objects.create(
+                                session=session,
+                                event_type='unknown_face',
+                                severity='warning',
+                                message="Unidentified face captured"
+                            )
+                            print("⚠ Unidentified face saved & event logged")
 
                 recognition_history.appendleft(recognition_frame_info)
 
@@ -170,5 +198,19 @@ while cap.isOpened():
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+
 cap.release()
 cv2.destroyAllWindows()
+
+# End session properly
+session.status = 'ended'
+session.end_time = datetime.now()
+session.save()
+Event.objects.create(
+    session=session,
+    event_type='session_ended',
+    severity='info',
+    message="Session ended"
+)
+print("🛑 Session ended & logged.")
+

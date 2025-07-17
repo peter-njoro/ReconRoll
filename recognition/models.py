@@ -73,8 +73,8 @@ class Event(models.Model):
         ('error', 'Error'),
         ('critical', 'Critical'),
     ]
-
     session = models.ForeignKey(Session, related_name='events', on_delete=models.CASCADE)
+    student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True)
     event_type = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
     message = models.TextField()
