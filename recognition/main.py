@@ -1,8 +1,48 @@
 import os
+import sys
+import uuid
 import cv2
 import time
+import argparse
+import django
 import numpy as np
-from face_utils import load_known_faces, get_face_encodings, matches_face_encoding, annotate_frame, safe_load_dnn_model
+from datetime import datetime
+
+
+
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+# Set Django settings
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+try:
+    django.setup()
+except Exception as e:
+    print(f"🔥 Django setup failed: {e}")
+    exit(1)
+
+from recognition.models import Session, AttendanceRecord, FaceEncoding, Student, UnidentifiedFace, Event
+
+# Parse args
+parser = argparse.ArgumentParser(description='Start face recognition for a session')
+parser.add_argument('--session-id', type=str, required=True, help='UUID of the session to use')
+parser.add_argument('--video', type=str, help='Path to video file (optional, for the recored video)')
+
+args = parser.parse_args()
+
+# Load the session
+try:
+    session = Session.objects.get(id=args.session_id)
+    print(f"✅ Loaded session: {session.subject} | Group: {session.class_group}")
+except Session.DoesNotExist:
+    print(f"❌ Session with id {args.session_id} not found.")
+
+from face_utils import (
+    get_face_encodings, matches_face_encoding,
+    annotate_frame, safe_load_dnn_model,
+    load_known_encodings_from_db
+)
 from video_utils import start_video_capture, calculate_fps
 from collections import deque
 
@@ -21,9 +61,12 @@ min_confidence = 0.5
 # ✅ Load known faces
 # -----------------------------
 print("🔄 Loading known face images...")
-known_face_encodings, known_face_names, _ = load_known_faces(
-    known_faces_dir, '', scale=scale_factor  # Empty string for id_card_dir
-)
+# known_face_encodings, known_face_names, _ = load_known_faces(
+#     known_faces_dir, '', scale=scale_factor
+# )
+print("🔄 Loading known face encodings from database...")
+known_face_encodings, known_face_names = load_known_encodings_from_db()
+
 
 # -----------------------------
 # ✅ Load DNN face detector
@@ -90,9 +133,34 @@ while cap.isOpened():
                         face_encoding, known_face_encodings, known_face_names, tolerance
                     )
                     recognition_frame_info.append((name, face_encoding))
-                    print(f"[{time.strftime('%H:%M:%S')}] Detected: {name}")
-                    print(f"  Match Distance: {distance:.4f}")
-                    print(f"  Encoding Sample: {np.round(face_encoding[:5], 4)}\n")
+                    print(f"[{time.strftime('%H:%M:%S')}] Detected: {name} | Distance: {distance:.4f}")
+
+                    if name != "unknown":
+                        student = Student.objects.filter(full_name=name).first()
+                        if student:
+                            # Check if attendance already recorded
+                            if not AttendanceRecord.objects.filter(session=session, student=student).exists():
+                                AttendanceRecord.objects.create(session=session, student=student)
+                                Event.objects.create(
+                                    session=session,
+                                    event_type='face_recognized',
+                                    severity='info',
+                                    message=f"Student recognized: {student.full_name}"
+                                )
+                                print(f"✅ Attendance marked for {student.full_name}")
+                    else:
+                        # Save cropped face & log
+                        from face_utils import save_unidentified_face
+                        saved_path = save_unidentified_face(frame, face_locations[i])
+                        if saved_path:
+                            UnidentifiedFace.objects.create(session=session, image_path=saved_path)
+                            Event.objects.create(
+                                session=session,
+                                event_type='unknown_face',
+                                severity='warning',
+                                message="Unidentified face captured"
+                            )
+                            print("⚠ Unidentified face saved & event logged")
 
                 recognition_history.appendleft(recognition_frame_info)
 
@@ -130,5 +198,19 @@ while cap.isOpened():
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+
 cap.release()
 cv2.destroyAllWindows()
+
+# End session properly
+session.status = 'ended'
+session.end_time = datetime.now()
+session.save()
+Event.objects.create(
+    session=session,
+    event_type='session_ended',
+    severity='info',
+    message="Session ended"
+)
+print("🛑 Session ended & logged.")
+
