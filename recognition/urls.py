@@ -11,4 +11,6 @@ urlpatterns = [
     path('enroll/success', views.enroll_success, name='enroll_success'),
     path('session/start/', views.start_session_view, name='start_session'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
+    path('session/<uuid:session_id>/start_recognition/', views.start_recognition_view, name='start_recognition'),
+    path('session/<uuid:session_id>/end/', views.end_session_view, name='end_session'),
 ]

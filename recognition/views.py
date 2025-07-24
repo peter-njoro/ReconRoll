@@ -4,11 +4,15 @@ import uuid
 import numpy as np
 import face_recognition
 from django.conf import settings
+from django.contrib import messages
+from django.core.signals import request_started
+from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
 from .forms import StudentForm, SessionForm
 from .face_utils import get_face_encodings
 from .models import FaceEncoding, Session, AttendanceRecord, Event
-
+from threading import Thread
+from recognition.recognition_runner import run_recognition
 
 # Constants to be transfered to settings.py or a config file
 KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
@@ -147,3 +151,47 @@ def session_detail(request, session_id):
 
 def record_event(session, message, event_type='info'):
     Event.objects.create(session=session, message=message, event_type=event_type)
+
+def start_recognition_view(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+
+    # Mark session as ongoing
+    session.status = 'ongoing'
+    session.save()
+
+    # Log event
+    Event.objects.create(
+        session=session,
+        event_type='session_started',
+        severity='info',
+        message="Session started"
+    )
+
+    # Start recognition loop in the background thread
+    dev_mode = request.GET.get('dev') == '1'
+    t = Thread(target=run_recognition, args=(str(session_id),), kwargs={'dev_mode': dev_mode})
+    t.start()
+
+    messages.success(request, f"Recognition started for session: {session.subject}")
+    return redirect('recognition:session_detail', session_id=session_id)
+
+def end_session_view(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+
+    if session.status != 'ended':
+        session.status = 'ended'
+        session.end_time = timezone.now()
+        session.save()
+
+        Event.objects.create(
+            session=session,
+            event_type='session_ended',
+            severity='info',
+            message="Session manually ended from Django UI"
+        )
+
+        messages.success(request, f"Session '{session.subject}' ended.")
+    else:
+        messages.info(request, f"Session '{session.subject}' was already ended.")
+
+    return redirect('recognition:session_detail', session_id=session_id)
