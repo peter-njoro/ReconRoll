@@ -1,12 +1,14 @@
+# recognition/recognition_runner.py
+
 import os
+import sys
 import cv2
 import uuid
 import numpy as np
 import django
-import sys
 from datetime import datetime
 
-# Setup Django (needed if run outside manage.py context)
+# Setup Django
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -18,22 +20,17 @@ from recognition.face_utils import (
     save_unidentified_face, load_known_encodings_from_db
 )
 
-def run_recognition(session_id, video=None, dev_mode=False):
-    """
-    session_id: UUID of session
-    video: path to video file (or None for webcam)
-    dev_mode: if True, skip DB writes & just print
-    """
+# 🔥 Store active recognition sessions
+from threading import Event as StopEvent
+active_recognition = {}  # e.g., {session_id: {"thread": thread, "stop_flag": StopEvent()}}
+
+def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
     print(f"🚀 Starting recognition for session {session_id} | dev_mode={dev_mode}")
 
-    # Load session
     session = Session.objects.get(id=session_id)
-
-    # Load known encodings
     known_face_encodings, known_face_names = load_known_encodings_from_db()
     print(f"✅ Loaded {len(known_face_encodings)} encodings")
 
-    # Open video or webcam
     cap = cv2.VideoCapture(video if video else 0)
     if not cap.isOpened():
         print("❌ Failed to open video source.")
@@ -43,6 +40,10 @@ def run_recognition(session_id, video=None, dev_mode=False):
     frame_count = 0
 
     while cap.isOpened():
+        if stop_flag and stop_flag.is_set():
+            print(f"🛑 Stop requested for session {session_id}")
+            break
+
         ret, frame = cap.read()
         if not ret:
             print("❌ Frame read failed or end of video.")
@@ -53,7 +54,6 @@ def run_recognition(session_id, video=None, dev_mode=False):
             continue
 
         face_locations, face_encodings = get_face_encodings(frame)
-
         for i, face_encoding in enumerate(face_encodings):
             name, distance, _ = matches_face_encoding(
                 face_encoding, known_face_encodings, known_face_names, tolerance=0.6
@@ -90,8 +90,6 @@ def run_recognition(session_id, video=None, dev_mode=False):
                 else:
                     print("[DEV MODE] Would save unidentified face")
 
-        # OPTIONAL: Add cv2.imshow() if you want live window (remove in prod)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("🛑 Quit requested by user.")
             break
@@ -107,7 +105,7 @@ def run_recognition(session_id, video=None, dev_mode=False):
             session=session,
             event_type='session_ended',
             severity='info',
-            message="Session ended"
+            message="Session ended (auto)"
         )
         print("🛑 Session ended & logged.")
     else:

@@ -1,6 +1,7 @@
 import os
 import cv2
 import uuid
+import threading
 import numpy as np
 import face_recognition
 from django.conf import settings
@@ -12,7 +13,7 @@ from .forms import StudentForm, SessionForm
 from .face_utils import get_face_encodings
 from .models import FaceEncoding, Session, AttendanceRecord, Event
 from threading import Thread
-from recognition.recognition_runner import run_recognition
+from recognition.recognition_runner import run_recognition, active_recognition
 
 # Constants to be transfered to settings.py or a config file
 KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
@@ -154,6 +155,16 @@ def record_event(session, message, event_type='info'):
 
 def start_recognition_view(request, session_id):
     session = get_object_or_404(Session, id=session_id)
+    dev_mode = request.GET.get('dev') == '1'
+
+     # Start recognition loop in the background thread
+
+    stop_flag = threading.Event()
+    t = Thread(target=run_recognition, args=(str(session_id),), kwargs={'dev_mode': dev_mode, 'stop_flag': stop_flag})
+    t.start()
+
+    active_recognition[str(session_id)] = {"thread": t, "stop_flag": stop_flag}
+
 
     # Mark session as ongoing
     session.status = 'ongoing'
@@ -167,16 +178,18 @@ def start_recognition_view(request, session_id):
         message="Session started"
     )
 
-    # Start recognition loop in the background thread
-    dev_mode = request.GET.get('dev') == '1'
-    t = Thread(target=run_recognition, args=(str(session_id),), kwargs={'dev_mode': dev_mode})
-    t.start()
-
     messages.success(request, f"Recognition started for session: {session.subject}")
     return redirect('recognition:session_detail', session_id=session_id)
 
 def end_session_view(request, session_id):
     session = get_object_or_404(Session, id=session_id)
+
+    # stop running thread if exists
+    active = active_recognition.get(str(session_id))
+    if active:
+        active["stop_flag"].set()
+        print(f"Sent top signal to recognition thread for session {session_id}")
+
 
     if session.status != 'ended':
         session.status = 'ended'
