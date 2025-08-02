@@ -24,7 +24,7 @@ def load_known_encodings_from_db():
 
     return np.array(known_encodings), known_names
 
-def get_face_encodings(image, model='hog', scale=0.25, min_size=100):
+def get_face_encodings(image, model='cnn', scale=0.25, min_size=100):
     small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale) if scale != 1.0 else image
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
