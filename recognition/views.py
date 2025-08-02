@@ -1,14 +1,21 @@
 import os
 import cv2
 import uuid
+import threading
 import numpy as np
 import face_recognition
+from threading import Thread
 from django.conf import settings
+from django.contrib import messages
+from django.core.signals import request_started
+from django.utils import timezone
+from django.template.loader import render_to_string
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from .forms import StudentForm, SessionForm
-from .face_utils import get_face_encodings
-from .models import FaceEncoding, Session, AttendanceRecord, Event
-
+from recognition.forms import StudentForm, SessionForm
+from recognition.face_utils import get_face_encodings
+from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, Student
+from recognition.recognition_runner import run_recognition, active_recognition
 
 # Constants to be transfered to settings.py or a config file
 KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
@@ -102,7 +109,6 @@ def enroll_view(request):
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
 
-
 def start_session_view(request):
     if request.method == 'POST':
         form = SessionForm(request.POST)
@@ -123,11 +129,7 @@ def start_session_view(request):
 def session_detail(request, session_id):
     session = get_object_or_404(Session, id=session_id)
 
-    if session.class_group:
-        expected_students = session.class_group.students.all()
-    else:
-        from recognition.models import Student
-        expected_students = Student.objects.none()
+    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
 
     present_records = AttendanceRecord.objects.filter(session=session)
     present_students = [record.student for record in present_records]
@@ -145,5 +147,101 @@ def session_detail(request, session_id):
     }
     return render(request, 'recognition/session_detail.html', context)
 
+def session_events_partial(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    events = session.events.order_by('-timestamp')[:20]
+    html = render_to_string('recognition/partials/_events_list.html', {'events': events})
+    return HttpResponse(html)
+
+def session_present_students_partial(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
+    present_students = [r.student for r in present_records]
+    html = render_to_string('recognition/partials/_present_students.html', {'present_students': present_students})
+    return HttpResponse(html)
+
+def session_absent_students_partial(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    expected_students = session.class_group.students.all() if session.class_group else []
+    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
+    present_students = [r.student for r in present_records]
+    absent_students = expected_students.exclude(id__in=[s.id for s in present_students]) if expected_students else []
+    html = render_to_string('recognition/partials/_absent_students.html', {'absent_students': absent_students})
+    return HttpResponse(html)
+
+def session_unidentified_faces_partial(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    unidentified_faces = session.unidentified_faces.all()
+    html = render_to_string('recognition/partials/_unidentified_faces.html', {'unidentified_faces': unidentified_faces})
+    return HttpResponse(html)
+
 def record_event(session, message, event_type='info'):
     Event.objects.create(session=session, message=message, event_type=event_type)
+
+def start_recognition_view(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    dev_mode = request.GET.get('dev') == '1'
+
+     # Start recognition loop in the background thread
+
+    stop_flag = threading.Event()
+    t = Thread(target=run_recognition, args=(str(session_id),), kwargs={'dev_mode': dev_mode, 'stop_flag': stop_flag})
+    t.start()
+
+    active_recognition[str(session_id)] = {"thread": t, "stop_flag": stop_flag}
+
+
+    # Mark session as ongoing
+    session.status = 'ongoing'
+    session.save()
+
+    # Log event
+    Event.objects.create(
+        session=session,
+        event_type='session_started',
+        severity='info',
+        message="Session started"
+    )
+
+    messages.success(request, f"Recognition started for session: {session.subject}")
+    return redirect('recognition:session_detail', session_id=session_id)
+
+def recognition_progress_partial(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    total_expected = session.class_group.students.count() if session.class_group else 0
+    present_count = session.attendance_records.count()
+    unknown_count = session.unidentified_faces.count()
+    return JsonResponse({
+        "present_count": present_count,
+        "total_expected": total_expected,
+        "unknown_count": unknown_count,
+    })
+
+
+def end_session_view(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+
+    # stop running thread if exists
+    active = active_recognition.get(str(session_id))
+    if active:
+        active["stop_flag"].set()
+        print(f"Sent top signal to recognition thread for session {session_id}")
+
+
+    if session.status != 'ended':
+        session.status = 'ended'
+        session.end_time = timezone.now()
+        session.save()
+
+        Event.objects.create(
+            session=session,
+            event_type='session_ended',
+            severity='info',
+            message="Session manually ended from Django UI"
+        )
+
+        messages.success(request, f"Session '{session.subject}' ended.")
+    else:
+        messages.info(request, f"Session '{session.subject}' was already ended.")
+
+    return redirect('recognition:session_detail', session_id=session_id)

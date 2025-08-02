@@ -33,7 +33,7 @@ class AttendanceRecord(models.Model):
     notes = models.TextField(blank=True, null=True)
 
     class Meta:
-        unique_together = ('student', 'student')
+        unique_together = ('session', 'student')
         ordering = ['-timestamp']
 
     def __str__(self):
@@ -76,6 +76,7 @@ class Event(models.Model):
     session = models.ForeignKey(Session, related_name='events', on_delete=models.CASCADE)
     student = models.ForeignKey(Student, on_delete=models.SET_NULL, null=True, blank=True)
     event_type = models.CharField(max_length=50, choices=EVENT_TYPE_CHOICES)
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='info')
     timestamp = models.DateTimeField(auto_now_add=True)
     message = models.TextField()
     metadata = models.JSONField(default=dict, blank=True) # Optional: confidence, face_id, etc.
