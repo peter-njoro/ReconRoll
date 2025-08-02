@@ -17,4 +17,5 @@ urlpatterns = [
     path('session/<uuid:session_id>/present_partial/', views.session_present_students_partial, name='session_present_partial'),
     path('session/<uuid:session_id>/absent_partial/', views.session_absent_students_partial, name='session_absent_partial'),
     path('session/<uuid:session_id>/unidentified_partial/', views.session_unidentified_faces_partial, name='session_unidentified_partial'),
+    path('session/<uuid:session_id>/progress_partial/', views.recognition_progress_partial, name='recognition_progress_partial')
 ]

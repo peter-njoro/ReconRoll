@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.core.signals import request_started
 from django.utils import timezone
 from django.template.loader import render_to_string
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import get_face_encodings
@@ -109,7 +109,6 @@ def enroll_view(request):
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
 
-
 def start_session_view(request):
     if request.method == 'POST':
         form = SessionForm(request.POST)
@@ -206,6 +205,18 @@ def start_recognition_view(request, session_id):
 
     messages.success(request, f"Recognition started for session: {session.subject}")
     return redirect('recognition:session_detail', session_id=session_id)
+
+def recognition_progress_partial(request, session_id):
+    session = get_object_or_404(Session, id=session_id)
+    total_expected = session.class_group.students.count() if session.class_group else 0
+    present_count = session.attendance_records.count()
+    unknown_count = session.unidentified_faces.count()
+    return JsonResponse({
+        "present_count": present_count,
+        "total_expected": total_expected,
+        "unknown_count": unknown_count,
+    })
+
 
 def end_session_view(request, session_id):
     session = get_object_or_404(Session, id=session_id)

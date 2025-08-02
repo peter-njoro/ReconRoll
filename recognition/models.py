@@ -33,7 +33,7 @@ class AttendanceRecord(models.Model):
     notes = models.TextField(blank=True, null=True)
 
     class Meta:
-        unique_together = ('student', 'student')
+        unique_together = ('session', 'student')
         ordering = ['-timestamp']
 
     def __str__(self):
