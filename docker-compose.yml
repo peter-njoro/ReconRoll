@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  facetrack:
+    build: .
+    container_name: facetrack-lite
+    ports: 
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - FACE_MODEL=hog
+      - SCALE=0.25
+      - MIN_FACE_SIZE=100
+      - TOLERANCE=0.55
+    stdin_open: true
+    tty: true
