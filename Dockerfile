@@ -27,10 +27,13 @@ RUN pip install -r /requirements.txt
 
 # Copy the application code
 COPY ./app /app
-COPY ./scripts/ ./scripts
+COPY ./scripts/scripts.sh /scripts/scripts.sh
+
 
 # Make the script executable
-RUN chmod +x ./scripts/scripts.sh
+RUN chmod +x /scripts/scripts.sh
 
 #port 
 EXPOSE 8000
+
+CMD ["scripts.sh"]
