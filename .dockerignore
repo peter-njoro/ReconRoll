@@ -1,0 +1,46 @@
+*.pyo
+*.pyd
+env/
+venv/
+*.db
+
+# Ignore version control
+.git/
+.gitignore
+
+# Ignore local development files
+.env
+*.pyc
+__pycache__/
+*.sqlite3
+*.swp
+*.swo
+
+# Ignore IDE files
+.idea/
+.vscode/
+
+# Ignore local logs and temp files
+*.log
+*.pid
+*.tmp
+/tmp/
+
+# Ignore static files (if collected separately)
+/staticfiles/
+
+# Ignore media files (if handled separately)
+/media/
+
+# Ignore documentation
+/docs/
+README.md
+
+# Ignore Docker files (except those needed for build)
+docker-compose.override.yml
+Dockerfile-dev
+
+staticfiles/
+local.txt
+
+.env.prod
