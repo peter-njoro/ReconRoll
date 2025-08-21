@@ -173,5 +173,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-recognition/uploads/faces/*
+app/recognition/uploads/faces/*
 app/static/*
+app/recognition/uploads/unidentified/*
+app/recognition/uploads/*
+app/media/uploads/unidentified/*
