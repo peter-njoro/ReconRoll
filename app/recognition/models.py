@@ -108,10 +108,12 @@ class ClassGroup(models.Model):
     def student_count(self):
         return self.students.count()
 
+
 class UnidentifiedFace(models.Model):
     session = models.ForeignKey('Session', on_delete=models.CASCADE, related_name='unidentified_faces')
-    image = models.ImageField(upload_to="unidentified/", null=True, blank=True)
+    cropped_face = models.ImageField(upload_to="unidentified/cropped/", null=True, blank=True)
+    full_frame = models.ImageField(upload_to="unidentified/full/", null=True, blank=True)  # New field
     timestamp = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return f"Unidentified face at {self.timestamp}"

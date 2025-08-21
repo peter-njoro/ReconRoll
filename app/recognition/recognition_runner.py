@@ -24,7 +24,7 @@ django.setup()
 from recognition.models import Session, Student, AttendanceRecord, UnidentifiedFace, Event
 from recognition.face_utils import (
     get_face_encodings, matches_face_encoding,
-    save_unidentified_face, load_known_encodings_from_db,
+    save_unidentified_faces, load_known_encodings_from_db,
     annotate_frame, safe_load_dnn_model
 )
 
@@ -103,9 +103,13 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
             else:
                 if not dev_mode:
-                    saved_path = save_unidentified_face(frame, face_locations[i])
-                    if saved_path:
-                        UnidentifiedFace.objects.create(session=session, image=saved_path)
+                    cropped_path, full_path = save_unidentified_faces(frame, face_locations[i])
+                    if cropped_path and full_path:
+                        UnidentifiedFace.objects.create(
+                            session=session, 
+                            cropped_face=cropped_path,
+                            full_frame=full_path  # Save the full frame
+                        )
                         Event.objects.create(
                             session=session,
                             event_type='unknown_face',
@@ -113,8 +117,6 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                             message="Unidentified face captured"
                         )
                         print("⚠ Unidentified face saved & event logged")
-                else:
-                    print("[DEV MODE] Would save unidentified face")
 
         #  Show live annotated frame in dev_mode
         if dev_mode and face_locations:

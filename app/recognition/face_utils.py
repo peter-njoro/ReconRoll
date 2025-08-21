@@ -119,21 +119,32 @@ def safe_load_dnn_model():
 
     return net
 
-def save_unidentified_face(frame, face_location):
+def save_unidentified_faces(frame, face_location, base_dir='uploads/unidentified/'):
     """
-    Crop face from frame & save to file; return relative path to save in DB
+    Save both the cropped face AND the full frame with face marked
     """
     top, right, bottom, left = face_location
-    cropped = frame[top:bottom, left:right]
-    filename = f"{uuid.uuid4()}.jpg"
-    relative_path = os.path.join("unidentified", filename)
-    abs_path = os.path.join(settings.MEDIA_ROOT, relative_path)
     
-    # Ensure the directory exists
-    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    # 1. Save cropped face (existing functionality)
+    cropped = frame[top:bottom, left:right]
+    cropped_filename = f"{uuid.uuid4()}_cropped.jpg"
+    cropped_path = os.path.join(base_dir, 'cropped', cropped_filename)
+    cropped_abs_path = os.path.join(settings.MEDIA_ROOT, cropped_path)
+    os.makedirs(os.path.dirname(cropped_abs_path), exist_ok=True)
+    
+    # 2. Save full frame with face highlighted (new functionality)
+    full_frame = frame.copy()
+    # Draw rectangle around the face for better visibility
+    cv2.rectangle(full_frame, (left, top), (right, bottom), (0, 255, 0), 2)
+    full_filename = f"{uuid.uuid4()}_full.jpg"
+    full_path = os.path.join(base_dir, 'full', full_filename)
+    full_abs_path = os.path.join(settings.MEDIA_ROOT, full_path)
+    os.makedirs(os.path.dirname(full_abs_path), exist_ok=True)
+    
     try:
-        cv2.imwrite(abs_path, cropped)
-        return relative_path
+        cv2.imwrite(cropped_abs_path, cropped)
+        cv2.imwrite(full_abs_path, full_frame)
+        return cropped_path, full_path  # Return both paths
     except Exception as e:
         print(f"❌ Failed to save unidentified face: {e}")
-        return None
+        return None, None
