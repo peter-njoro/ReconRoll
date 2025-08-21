@@ -25,7 +25,7 @@ from recognition.models import Session, Student, AttendanceRecord, UnidentifiedF
 from recognition.face_utils import (
     get_face_encodings, matches_face_encoding,
     save_unidentified_face, load_known_encodings_from_db,
-    annotate_frame
+    annotate_frame, safe_load_dnn_model
 )
 
 from threading import Event as StopEvent
@@ -33,6 +33,11 @@ active_recognition = {}  # e.g., {session_id: {"thread": thread, "stop_flag": St
 
 def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
     print(f"🚀 Starting recognition for session {session_id} | dev_mode={dev_mode}")
+
+    # Load DNN model if using DNN face detection
+    dnn_net = None
+    if face_model == 'dnn':
+        dnn_net = safe_load_dnn_model()
 
     session = Session.objects.get(id=session_id)
     known_face_encodings, known_face_names = load_known_encodings_from_db()
@@ -61,9 +66,14 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
             continue
 
         # 🔍 Detect faces & get encodings
-        face_locations, face_encodings = get_face_encodings(
-            frame, model=face_model, scale=scale, min_size=min_size
-        )
+        if face_model == 'dnn':
+            face_locations, face_encodings = get_face_encodings(
+                frame, model=face_model, scale=scale, min_size=min_size, dnn_net=dnn_net
+            )
+        else:
+            face_locations, face_encodings = get_face_encodings(
+                frame, model=face_model, scale=scale, min_size=min_size
+            )
         print(f"[DEBUG] Frame {frame_count}: {len(face_locations)} locations, {len(face_encodings)} encodings")
 
         recognition_results = []
@@ -95,7 +105,7 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                 if not dev_mode:
                     saved_path = save_unidentified_face(frame, face_locations[i])
                     if saved_path:
-                        UnidentifiedFace.objects.create(session=session, image_path=saved_path)
+                        UnidentifiedFace.objects.create(session=session, image=saved_path)
                         Event.objects.create(
                             session=session,
                             event_type='unknown_face',
@@ -106,7 +116,7 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                 else:
                     print("[DEV MODE] Would save unidentified face")
 
-        # 🛠 Show live annotated frame in dev_mode
+        #  Show live annotated frame in dev_mode
         if dev_mode and face_locations:
             face_names = [name for name, _ in recognition_results]
             annotated = annotate_frame(

@@ -110,5 +110,8 @@ class ClassGroup(models.Model):
 
 class UnidentifiedFace(models.Model):
     session = models.ForeignKey('Session', on_delete=models.CASCADE, related_name='unidentified_faces')
-    image_path = models.CharField(max_length=255)
+    image = models.ImageField(upload_to="unidentified/", null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Unidentified face at {self.timestamp}"

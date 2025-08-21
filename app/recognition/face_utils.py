@@ -24,24 +24,44 @@ def load_known_encodings_from_db():
 
     return np.array(known_encodings), known_names
 
-def get_face_encodings(image, model='cnn', scale=0.25, min_size=100):
+def get_face_encodings(image, model='cnn', scale=0.25, min_size=100, dnn_net=None):
     small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale) if scale != 1.0 else image
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
+    if model == 'dnn' and dnn_net is not None:
+        # DNN face detection
+        (h, w) = rgb_small_frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(rgb_small_frame, 1.0, (300, 300), (104.0, 177.0, 123.0))
+        dnn_net.setInput(blob)
+        detections = dnn_net.forward()
+        face_locations = []
+        for i in range(0, detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5:
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (left, top, right, bottom) = box.astype("int")
+                # Ensure box is within image bounds and meets min_size
+                if (right - left) >= min_size and (bottom - top) >= min_size:
+                    face_locations.append((top, right, bottom, left))
+        if not face_locations:
+            return [], []
+        face_encodings = face_recognition.face_encodings(
+            rgb_small_frame, face_locations, num_jitters=1
+        )
+        return face_locations, face_encodings
+
+    # Default to HOG/CNN
     face_locations = face_recognition.face_locations(
         rgb_small_frame,
         number_of_times_to_upsample=1,
         model=model
     )
-
     face_locations = [
         loc for loc in face_locations
         if (loc[2] - loc[0]) >= min_size and (loc[1] - loc[3]) >= min_size
     ]
-
     if not face_locations:
         return [], []
-
     face_encodings = face_recognition.face_encodings(
         rgb_small_frame,
         face_locations,
@@ -99,19 +119,21 @@ def safe_load_dnn_model():
 
     return net
 
-def save_unidentified_face(frame, face_location, base_dir='recognition/uploads/unidentified/'):
+def save_unidentified_face(frame, face_location):
     """
     Crop face from frame & save to file; return relative path to save in DB
     """
     top, right, bottom, left = face_location
     cropped = frame[top:bottom, left:right]
     filename = f"{uuid.uuid4()}.jpg"
-    path = os.path.join(base_dir, filename)
-    abs_path = os.path.join(settings.BASE_DIR, path)
+    relative_path = os.path.join("unidentified", filename)
+    abs_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+    
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
     try:
         cv2.imwrite(abs_path, cropped)
-        return path
+        return relative_path
     except Exception as e:
         print(f"❌ Failed to save unidentified face: {e}")
         return None
-
