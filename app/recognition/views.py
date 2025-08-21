@@ -7,6 +7,7 @@ import face_recognition
 from threading import Thread
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.signals import request_started
 from django.utils import timezone
 from django.template.loader import render_to_string
@@ -109,6 +110,7 @@ def enroll_view(request):
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
 
+@login_required
 def start_session_view(request):
     if request.method == 'POST':
         form = SessionForm(request.POST)
@@ -245,3 +247,11 @@ def end_session_view(request, session_id):
         messages.info(request, f"Session '{session.subject}' was already ended.")
 
     return redirect('recognition:session_detail', session_id=session_id)
+
+
+def sessions_list(request):
+    sessions = Session.objects.all().order_by('-start_time')
+    context = {
+        'sessions': sessions
+    }
+    return render(request, 'recognition/session_list.html', context)
