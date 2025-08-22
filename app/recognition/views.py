@@ -12,7 +12,7 @@ from django.core.signals import request_started
 from django.utils import timezone
 from django.template.loader import render_to_string
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404, reverse
 from django.core.cache import cache
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import get_face_encodings
@@ -125,26 +125,111 @@ def enroll_progress(request):
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
 
-@login_required
-def start_session_view(request):
-    if request.method == 'POST':
-        form = SessionForm(request.POST)
-        if form.is_valid():
-            session = form.save(commit=False)
-            session.created_by = request.user
-            session.save()
-            # redirect to session detail page or list
-            return redirect('recognition:session_detail', session_id=session.id)
-    else:
-        form = SessionForm()
+  
 
-        context = {
-            'form': form,
+@login_required
+def start_session_view(request, session_id):
+    """
+    Start recognition session - handles both normal mode and dev mode (main.py)
+    Handle both session creation and starting recognition
+    If session_id is provided, start recognition for that session
+    If no session_id, create a new session
+    """
+    session = get_object_or_404(Session, id=session_id)
+    dev_mode = request.GET.get('dev') == '1'
+
+    if session_id:
+        # This is for starting recognition on an existing session
+        return start_recognition_for_session(request, session_id)
+    else:
+        # This is for creating a new session
+        return create_new_session(request)
+
+    # Check if session is already running
+    if str(session_id) in active_recognition:
+        active_session = active_recognition[str(session_id)]
+        if active_session.get("thread") and active_session["thread"].is_alive():
+            messages.warning(request, f"Recognition is already running for session: {session.subject}")
+            return redirect('recognition:session_detail', session_id=session_id)
+
+    # Validate session state
+    if session.status == 'ended':
+        messages.error(request, f"Cannot start session '{session.subject}' - it has already ended.")
+        return redirect('recognition:session_detail', session_id=session_id)
+
+    # Check if we have students in the class group (for non-dev mode)
+    if not dev_mode and session.class_group and session.class_group.students.count() == 0:
+        messages.warning(request, f"Class group '{session.class_group.name}' has no students. Please add students first.")
+        return redirect('recognition:session_detail', session_id=session_id)
+
+    # Check if we have any face encodings in the database (for non-dev mode)
+    if not dev_mode and not FaceEncoding.objects.exists():
+        messages.warning(request, "No face encodings found in database. Please enroll students first.")
+        return redirect('recognition:session_detail', session_id=session_id)
+
+    stop_flag = threading.Event()
+    
+    try:
+        # Start recognition in a separate thread
+        t = Thread(
+            target=run_recognition,
+            args=(str(session_id),),
+            kwargs={
+                'dev_mode': dev_mode,
+                'stop_flag': stop_flag
+            },
+            name=f"RecognitionThread-{session_id}-{'dev' if dev_mode else 'prod'}"
+        )
+        t.daemon = True
+        t.start()
+
+        # Store the thread and stop flag for management
+        active_recognition[str(session_id)] = {
+            "thread": t,
+            "stop_flag": stop_flag,
+            "started_at": timezone.now(),
+            "mode": "dev" if dev_mode else "prod"
         }
-    return render(request, 'recognition/start_session.html', context)
+
+        # Update session status
+        session.status = 'ongoing'
+        session.started_by = request.user
+        session.save()
+
+        # Log the start event
+        Event.objects.create(
+            session=session,
+            event_type='session_started',
+            severity='info',
+            message=f"Session started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
+        )
+
+        # Success message with appropriate mode indication
+        mode_info = " (DEV MODE - using main.py)" if dev_mode else ""
+        messages.success(request, f"Recognition started{mode_info} for session: {session.subject}")
+
+        # Redirect to session detail with dev mode parameter if applicable
+        if dev_mode:
+            return redirect(reverse('recognition:session_detail', kwargs={'session_id': session_id}) + '?dev=1')
+        else:
+            return redirect('recognition:session_detail', session_id=session_id)
+
+    except Exception as e:
+        # Handle any errors during thread startup
+        messages.error(request, f"Failed to start recognition: {str(e)}")
+        session.status = 'ready'  # Reset status if startup failed
+        session.save()
+        
+        # Clean up if thread was partially created
+        if str(session_id) in active_recognition:
+            active_recognition.pop(str(session_id))
+            
+        return redirect('recognition:session_detail', session_id=session_id)
 
 def session_detail(request, session_id):
     session = get_object_or_404(Session, id=session_id)
+    # Check if this session was started in dev mode
+    is_dev_mode = request.GET.get('dev') == '1' or session.status == 'ongoing' and 'dev' in request.META.get('HTTP_REFERER', '')
 
     expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
 
@@ -161,6 +246,7 @@ def session_detail(request, session_id):
         'absent_students': absent_students,
         'unidentified_faces': unidentified_faces,
         'events': events,
+        'is_dev_mode': is_dev_mode
     }
     return render(request, 'recognition/session_detail.html', context)
 
@@ -199,14 +285,20 @@ def start_recognition_view(request, session_id):
     session = get_object_or_404(Session, id=session_id)
     dev_mode = request.GET.get('dev') == '1'
 
-     # Start recognition loop in the background thread
+    # Check if already running
+    if str(session_id) in active_recognition:
+        messages.warning(request, f"Recognition is already running for session: {session.subject}")
+        return redirect('recognition:session_detail', session_id=session_id)
 
     stop_flag = threading.Event()
-    t = Thread(target=run_recognition, args=(str(session_id),), kwargs={'dev_mode': dev_mode, 'stop_flag': stop_flag})
+
+    # For both dev and prod, use the same runner, but dev_mode changes behavior
+    t = Thread(target=run_recognition, args=(str(session_id),),
+               kwargs={'dev_mode': dev_mode, 'stop_flag': stop_flag})
+    t.daemon = True
     t.start()
 
     active_recognition[str(session_id)] = {"thread": t, "stop_flag": stop_flag}
-
 
     # Mark session as ongoing
     session.status = 'ongoing'
@@ -217,10 +309,11 @@ def start_recognition_view(request, session_id):
         session=session,
         event_type='session_started',
         severity='info',
-        message="Session started"
+        message=f"Session started in {'DEV' if dev_mode else 'PROD'} mode"
     )
 
-    messages.success(request, f"Recognition started for session: {session.subject}")
+    mode_msg = " (DEV MODE - main.py)" if dev_mode else ""
+    messages.success(request, f"Recognition started{mode_msg} for session: {session.subject}")
     return redirect('recognition:session_detail', session_id=session_id)
 
 def recognition_progress_partial(request, session_id):
@@ -238,12 +331,19 @@ def recognition_progress_partial(request, session_id):
 def end_session_view(request, session_id):
     session = get_object_or_404(Session, id=session_id)
 
-    # stop running thread if exists
+    # Stop running thread/process if exists
     active = active_recognition.get(str(session_id))
     if active:
         active["stop_flag"].set()
-        print(f"Sent top signal to recognition thread for session {session_id}")
 
+        # Also terminate subprocess if running in dev mode
+        if "process" in active and active["process"]:
+            active["process"].terminate()
+
+        print(f"Sent stop signal to recognition for session {session_id}")
+
+        # Clean up
+        active_recognition.pop(str(session_id), None)
 
     if session.status != 'ended':
         session.status = 'ended'
@@ -264,9 +364,95 @@ def end_session_view(request, session_id):
     return redirect('recognition:session_detail', session_id=session_id)
 
 
+
 def sessions_list(request):
     sessions = Session.objects.all().order_by('-start_time')
+    
+    # Get active session information
+    active_session_info = []
+    for session_id, session_data in active_recognition.items():
+        try:
+            session_obj = Session.objects.get(id=session_id)
+            active_session_info.append({
+                'id': session_id,
+                'is_active': session_data.get("thread") and session_data["thread"].is_alive(),
+                'mode': session_data.get("mode", "unknown")
+            })
+        except (Session.DoesNotExist, ValueError):
+            # Clean up invalid entries
+            active_recognition.pop(session_id, None)
+    
     context = {
-        'sessions': sessions
+        'sessions': sessions,
+        'active_session_info': active_session_info
     }
     return render(request, 'recognition/session_list.html', context)
+
+
+def get_active_sessions(request):
+    """Get list of currently active sessions"""
+    active_sessions = []
+    for session_id, session_data in active_recognition.items():
+        try:
+            session = Session.objects.get(id=session_id)
+            active_sessions.append({
+                'session': session,
+                'thread_alive': session_data.get("thread", None) and session_data["thread"].is_alive(),
+                'mode': session_data.get("mode", "unknown"),
+                'started_at': session_data.get("started_at", timezone.now())
+            })
+        except Session.DoesNotExist:
+            # Clean up non-existent sessions
+            active_recognition.pop(session_id, None)
+    
+    return active_sessions
+
+def stop_all_sessions(request):
+    """Stop all active recognition sessions (admin function)"""
+    stopped_count = 0
+    for session_id, session_data in active_recognition.items():
+        try:
+            session = Session.objects.get(id=session_id)
+            if session_data.get("stop_flag"):
+                session_data["stop_flag"].set()
+                
+            # Update session status
+            if session.status == 'ongoing':
+                session.status = 'ended'
+                session.end_time = timezone.now()
+                session.save()
+                
+                Event.objects.create(
+                    session=session,
+                    event_type='session_ended',
+                    severity='info',
+                    message="Session stopped by admin"
+                )
+                
+            stopped_count += 1
+            
+        except Session.DoesNotExist:
+            pass
+        
+        # Clean up
+        active_recognition.pop(session_id, None)
+    
+    messages.info(request, f"Stopped {stopped_count} active sessions")
+    return redirect('recognition:sessions_list')
+
+def session_status_api(request, session_id):
+    """API endpoint to check session status"""
+    session = get_object_or_404(Session, id=session_id)
+    
+    active_data = active_recognition.get(str(session_id), {})
+    thread_alive = active_data.get("thread") and active_data["thread"].is_alive()
+    
+    return JsonResponse({
+        'session_id': session_id,
+        'status': session.status,
+        'thread_alive': thread_alive,
+        'mode': active_data.get("mode", "none"),
+        'started_at': active_data.get("started_at", None),
+        'present_count': session.attendance_records.count(),
+        'unknown_count': session.unidentified_faces.count()
+    })

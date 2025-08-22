@@ -5,6 +5,8 @@ import sys
 import cv2
 import numpy as np
 import django
+import subprocess
+import threading
 from datetime import datetime
 
 # 🔧 Load env vars & config safely
@@ -33,6 +35,10 @@ active_recognition = {}  # e.g., {session_id: {"thread": thread, "stop_flag": St
 
 def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
     print(f"🚀 Starting recognition for session {session_id} | dev_mode={dev_mode}")
+
+    if dev_mode:
+        # Run main.py in dev mode
+        return run_main_py_dev_mode(session_id, stop_flag)
 
     # Load DNN model if using DNN face detection
     dnn_net = None
@@ -151,3 +157,58 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
         print("[DEV MODE] Would end session & log event")
 
     print("🎉 Recognition finished.")
+
+def run_main_py_dev_mode(session_id, stop_flag):
+    """Run main.py as a subprocess for dev mode"""
+    print(f"🔧 Starting main.py in dev mode for session {session_id}")
+
+    # Build command to run main.py
+    cmd = [
+        sys.executable,  # Use the same Python interpreter
+        os.path.join(os.path.dirname(__file__), 'main.py'),
+        '--session-id', str(session_id)
+    ]
+
+    # Start the subprocess
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    # Store process reference for stopping
+    if str(session_id) not in active_recognition:
+        active_recognition[str(session_id)] = {}
+    active_recognition[str(session_id)]["process"] = process
+
+    # Monitor the process and stop flag
+    def monitor_process():
+        while True:
+            if stop_flag and stop_flag.is_set():
+                print(f"🛑 Stopping main.py process for session {session_id}")
+                process.terminate()
+                break
+
+            # Check if process is still running
+            if process.poll() is not None:
+                print(f"main.py process ended with return code: {process.returncode}")
+                break
+
+            # Read and log output
+            output = process.stdout.readline()
+            if output:
+                print(f"[main.py] {output.strip()}")
+
+            threading.Event().wait(0.1)  # Small delay
+
+        # Clean up
+        if str(session_id) in active_recognition:
+            active_recognition[str(session_id)].pop("process", None)
+
+    # Start monitoring thread
+    monitor_thread = threading.Thread(target=monitor_process)
+    monitor_thread.daemon = True
+    monitor_thread.start()
+
+    return process
