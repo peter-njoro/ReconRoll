@@ -33,6 +33,7 @@ from recognition.face_utils import (
 from threading import Event as StopEvent
 active_recognition = {}  # e.g., {session_id: {"thread": thread, "stop_flag": StopEvent()}}
 
+
 def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
     print(f"🚀 Starting recognition for session {session_id} | dev_mode={dev_mode}")
 
@@ -48,6 +49,9 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
     session = Session.objects.get(id=session_id)
     known_face_encodings, known_face_names = load_known_encodings_from_db()
     print(f"✅ Loaded {len(known_face_encodings)} encodings")
+
+    # Cache for previously seen unknown encodings
+    unknown_encodings = []
 
     cap = cv2.VideoCapture(video if video else 0)
     if not cap.isOpened():
@@ -84,13 +88,15 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
         recognition_results = []
         for i, face_encoding in enumerate(face_encodings):
-            name, distance, _ = matches_face_encoding(
-                face_encoding, known_face_encodings, known_face_names, tolerance=tolerance
+            # 🔥 Updated to 4-return version
+            name, distance, idx, is_known = matches_face_encoding(
+                face_encoding, known_face_encodings, known_face_names,
+                unknown_encodings, tolerance=tolerance
             )
             recognition_results.append((name, distance))
             print(f"[INFO] Detected: {name} | Distance: {distance:.4f}")
 
-            if name != "unknown":
+            if is_known and name != "unknown":
                 if not dev_mode:
                     student = Student.objects.filter(full_name=name).first()
                     if student:
@@ -109,20 +115,29 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
             else:
                 if not dev_mode:
-                    cropped_path, full_path = save_unidentified_faces(frame, face_locations[i])
-                    if cropped_path and full_path:
-                        UnidentifiedFace.objects.create(
-                            session=session, 
-                            cropped_face=cropped_path,
-                            full_frame=full_path  # Save the full frame
+                    if idx == -1:  # brand new unknown
+                        cropped_path, full_path, saved_encoding = save_unidentified_faces(
+                            frame, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
                         )
-                        Event.objects.create(
-                            session=session,
-                            event_type='unknown_face',
-                            severity='warning',
-                            message="Unidentified face captured"
-                        )
-                        print("⚠ Unidentified face saved & event logged")
+                        if cropped_path and full_path:
+                            UnidentifiedFace.objects.create(
+                                session=session,
+                                cropped_face=cropped_path,
+                                full_frame=full_path
+                            )
+                            Event.objects.create(
+                                session=session,
+                                event_type='unknown_face',
+                                severity='warning',
+                                message="Unidentified face captured"
+                            )
+                            print("⚠ Unidentified face saved & event logged")
+                            if saved_encoding is not None:
+                                unknown_encodings.append(saved_encoding)
+                    else:
+                        print("ℹ️ Unknown face already saved, skipping duplicate.")
+                else:
+                    print("[DEV MODE] Would capture unidentified face (skipped DB write).")
 
         #  Show live annotated frame in dev_mode
         if dev_mode and face_locations:
@@ -158,13 +173,14 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
     print("🎉 Recognition finished.")
 
+
 def run_main_py_dev_mode(session_id, stop_flag):
     """Run main.py as a subprocess for dev mode with native OpenCV window"""
     print(f"🔧 Starting main.py in dev mode for session {session_id}")
 
     # Build command to run main.py
     cmd = [
-        sys.executable,  # Use the same Python interpreter
+        sys.executable,
         os.path.join(os.path.dirname(__file__), 'main.py'),
         '--session-id', str(session_id)
     ]
@@ -190,18 +206,15 @@ def run_main_py_dev_mode(session_id, stop_flag):
                 process.terminate()
                 break
 
-            # Check if process is still running
             if process.poll() is not None:
                 print(f"main.py process ended with return code: {process.returncode}")
                 break
 
-            threading.Event().wait(0.5)  # Small delay
+            threading.Event().wait(0.5)
 
-        # Clean up
         if str(session_id) in active_recognition:
             active_recognition[str(session_id)].pop("process", None)
 
-    # Start monitoring thread
     monitor_thread = threading.Thread(target=monitor_process)
     monitor_thread.daemon = True
     monitor_thread.start()

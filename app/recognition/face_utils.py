@@ -3,7 +3,7 @@ import cv2
 import uuid
 import numpy as np
 import face_recognition
-from recognition.models import Student, FaceEncoding
+from recognition.models import Student, UnidentifiedFace
 from django.conf import settings
 from collections import defaultdict, deque
 
@@ -70,16 +70,42 @@ def get_face_encodings(image, model='cnn', scale=0.25, min_size=100, dnn_net=Non
 
     return face_locations, face_encodings
 
-def matches_face_encoding(encoding, known_encodings, known_names, tolerance=0.5):
-    if not known_encodings.any():
-        return "unknown", float("inf"), -1
+def matches_face_encoding(encoding, known_encodings, known_names, unknown_encodings=None, tolerance=0.5):
+    """
+    Compare a face encoding against known and unknown encodings.
+    Returns:
+      - name: student name or "unknown"
+      - distance: best match distance
+      - index: index of the match (for known) or None (for unknown)
+      - is_known: True if match was a known student, False if it's an existing unknown
+    """
+    best_name = "unknown"
+    best_distance = float("inf")
+    best_index = -1
+    is_known = False
 
-    distances = np.linalg.norm(known_encodings - encoding, axis=1)
-    best_match_index = np.argmin(distances)
-    best_distance = distances[best_match_index]
+    # 1. Compare with known encodings
+    if known_encodings is not None and known_encodings.any():
+        distances = np.linalg.norm(known_encodings - encoding, axis=1)
+        idx = np.argmin(distances)
+        if distances[idx] <= tolerance:
+            best_name = known_names[idx]
+            best_distance = distances[idx]
+            best_index = idx
+            is_known = True
 
-    name = known_names[best_match_index] if best_distance <= tolerance else "unknown"
-    return name, best_distance, best_match_index
+    # 2. Compare with unknown encodings if still "unknown"
+    if not is_known and unknown_encodings is not None and len(unknown_encodings) > 0:
+        distances = np.linalg.norm(unknown_encodings - encoding, axis=1)
+        idx = np.argmin(distances)
+        if distances[idx] <= tolerance:
+            best_name = "unknown"  # but matched an existing unknown
+            best_distance = distances[idx]
+            best_index = idx
+            is_known = False
+
+    return best_name, best_distance, best_index, is_known
+
 
 def annotate_frame(frame, face_locations, face_names, face_encodings=None, scale=0.25):
     for i, ((top, right, bottom, left), name) in enumerate(zip(face_locations, face_names)):
@@ -119,32 +145,43 @@ def safe_load_dnn_model():
 
     return net
 
-def save_unidentified_faces(frame, face_location, base_dir='uploads/unidentified/'):
+def save_unidentified_faces(frame, face_location, session=None, base_dir='uploads/unidentified/', encoding=None):
     """
-    Save both the cropped face AND the full frame with face marked
+    Save both the cropped face AND the full frame with face marked.
+    Returns: (cropped_path, full_path, encoding)
     """
+    import cv2, os, uuid
+    from django.conf import settings
+
     top, right, bottom, left = face_location
-    
-    # 1. Save cropped face (existing functionality)
+
+    # Save cropped face
     cropped = frame[top:bottom, left:right]
     cropped_filename = f"{uuid.uuid4()}_cropped.jpg"
     cropped_path = os.path.join(base_dir, 'cropped', cropped_filename)
     cropped_abs_path = os.path.join(settings.MEDIA_ROOT, cropped_path)
     os.makedirs(os.path.dirname(cropped_abs_path), exist_ok=True)
-    
-    # 2. Save full frame with face highlighted (new functionality)
+
+    # Save full frame with rectangle
     full_frame = frame.copy()
-    # Draw rectangle around the face for better visibility
     cv2.rectangle(full_frame, (left, top), (right, bottom), (0, 255, 0), 2)
     full_filename = f"{uuid.uuid4()}_full.jpg"
     full_path = os.path.join(base_dir, 'full', full_filename)
     full_abs_path = os.path.join(settings.MEDIA_ROOT, full_path)
     os.makedirs(os.path.dirname(full_abs_path), exist_ok=True)
-    
+
     try:
         cv2.imwrite(cropped_abs_path, cropped)
         cv2.imwrite(full_abs_path, full_frame)
-        return cropped_path, full_path  # Return both paths
+
+        # If encoding was not passed, compute it
+        if encoding is None:
+            import face_recognition
+            rgb_face = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
+            encodings = face_recognition.face_encodings(rgb_face)
+            encoding = encodings[0] if encodings else None
+
+        return cropped_path, full_path, encoding
     except Exception as e:
         print(f"❌ Failed to save unidentified face: {e}")
-        return None, None
+        return None, None, None
