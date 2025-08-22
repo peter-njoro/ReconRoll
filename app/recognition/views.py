@@ -32,7 +32,7 @@ MIN_FACE_SIZE = 100
 def index(request):
     context = {
         'title': 'FaceTrack lite App', 
-        'message': 'Welcome to the Recognition App!'
+        'message': 'Welcome to FaceTrack Lite: finally, a tool that stares back at you harder than your laptop’s front camera during an online exam 👁️👁️. Don’t worry, we only judge a little.'
     }
     return render(request, 'recognition/index.html', context)
 
