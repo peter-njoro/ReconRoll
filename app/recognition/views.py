@@ -8,7 +8,6 @@ from threading import Thread
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.signals import request_started
 from django.utils import timezone
 from django.template.loader import render_to_string
 from django.http import HttpResponse, JsonResponse
@@ -19,7 +18,7 @@ from recognition.face_utils import get_face_encodings
 from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, Student
 from recognition.recognition_runner import run_recognition, active_recognition
 
-# Constants to be transfered to settings.py or a config file
+# Constants to be transferred to settings.py or a config file
 KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
 ID_CARD_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces', 'cards')
 SCALE_FACTOR = 0.25
@@ -30,15 +29,11 @@ PROCESS_EVERY_N_FRAMES = 3
 CARD_DISPLAY_FRAMES = 10
 MIN_FACE_SIZE = 100
 
-# Preload known data once at startup
-
-# Create your views here.
-
 def index(request):
     context = {
         'title': 'FaceTrack lite App', 
         'message': 'Welcome to the Recognition App!'
-        }
+    }
     return render(request, 'recognition/index.html', context)
 
 def enroll_view(request):
@@ -116,7 +111,6 @@ def enroll_view(request):
     context = {'form': form}
     return render(request, 'recognition/enroll.html', context)
 
-# Add a view to return progress
 def enroll_progress(request):
     progress_key = f"enroll_progress_{request.session.session_key}"
     progress = cache.get(progress_key, 0)
@@ -125,25 +119,27 @@ def enroll_progress(request):
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
 
-  
-
 @login_required
-def start_session_view(request, session_id):
-    """
-    Start recognition session - handles both normal mode and dev mode (main.py)
-    Handle both session creation and starting recognition
-    If session_id is provided, start recognition for that session
-    If no session_id, create a new session
-    """
-    session = get_object_or_404(Session, id=session_id)
-    dev_mode = request.GET.get('dev') == '1'
-
-    if session_id:
-        # This is for starting recognition on an existing session
-        return start_recognition_for_session(request, session_id)
+def create_session_view(request):
+    """View for creating a new session"""
+    if request.method == 'POST':
+        form = SessionForm(request.POST)
+        if form.is_valid():
+            session = form.save(commit=False)
+            session.created_by = request.user
+            session.status = 'ready'
+            session.save()
+            messages.success(request, f"Session '{session.subject}' created successfully!")
+            return redirect('recognition:session_detail', session_id=session.id)
     else:
-        # This is for creating a new session
-        return create_new_session(request)
+        form = SessionForm()
+
+    context = {'form': form}
+    return render(request, 'recognition/start_session.html', context)
+
+def start_recognition_for_session(request, session_id, dev_mode=False):
+    """Start recognition for an existing session"""
+    session = get_object_or_404(Session, id=session_id)
 
     # Check if session is already running
     if str(session_id) in active_recognition:
@@ -226,10 +222,24 @@ def start_session_view(request, session_id):
             
         return redirect('recognition:session_detail', session_id=session_id)
 
+@login_required
+def start_session_view(request, session_id=None):
+    """
+    Unified view for starting recognition sessions
+    If session_id is provided: start recognition for that session
+    If no session_id: redirect to session creation
+    """
+    if session_id:
+        dev_mode = request.GET.get('dev') == '1'
+        return start_recognition_for_session(request, session_id, dev_mode)
+    else:
+        # Redirect to session creation view
+        return redirect('recognition:create_session_view')
+
 def session_detail(request, session_id):
     session = get_object_or_404(Session, id=session_id)
     # Check if this session was started in dev mode
-    is_dev_mode = request.GET.get('dev') == '1' or session.status == 'ongoing' and 'dev' in request.META.get('HTTP_REFERER', '')
+    is_dev_mode = request.GET.get('dev') == '1' or (session.status == 'ongoing' and 'dev' in request.META.get('HTTP_REFERER', ''))
 
     expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
 
@@ -242,7 +252,7 @@ def session_detail(request, session_id):
 
     context = {
         'session': session,
-        'present_Students': present_students,
+        'present_students': present_students,
         'absent_students': absent_students,
         'unidentified_faces': unidentified_faces,
         'events': events,
@@ -281,41 +291,6 @@ def session_unidentified_faces_partial(request, session_id):
 def record_event(session, message, event_type='info'):
     Event.objects.create(session=session, message=message, event_type=event_type)
 
-def start_recognition_view(request, session_id):
-    session = get_object_or_404(Session, id=session_id)
-    dev_mode = request.GET.get('dev') == '1'
-
-    # Check if already running
-    if str(session_id) in active_recognition:
-        messages.warning(request, f"Recognition is already running for session: {session.subject}")
-        return redirect('recognition:session_detail', session_id=session_id)
-
-    stop_flag = threading.Event()
-
-    # For both dev and prod, use the same runner, but dev_mode changes behavior
-    t = Thread(target=run_recognition, args=(str(session_id),),
-               kwargs={'dev_mode': dev_mode, 'stop_flag': stop_flag})
-    t.daemon = True
-    t.start()
-
-    active_recognition[str(session_id)] = {"thread": t, "stop_flag": stop_flag}
-
-    # Mark session as ongoing
-    session.status = 'ongoing'
-    session.save()
-
-    # Log event
-    Event.objects.create(
-        session=session,
-        event_type='session_started',
-        severity='info',
-        message=f"Session started in {'DEV' if dev_mode else 'PROD'} mode"
-    )
-
-    mode_msg = " (DEV MODE - main.py)" if dev_mode else ""
-    messages.success(request, f"Recognition started{mode_msg} for session: {session.subject}")
-    return redirect('recognition:session_detail', session_id=session_id)
-
 def recognition_progress_partial(request, session_id):
     session = get_object_or_404(Session, id=session_id)
     total_expected = session.class_group.students.count() if session.class_group else 0
@@ -326,7 +301,6 @@ def recognition_progress_partial(request, session_id):
         "total_expected": total_expected,
         "unknown_count": unknown_count,
     })
-
 
 def end_session_view(request, session_id):
     session = get_object_or_404(Session, id=session_id)
@@ -363,21 +337,18 @@ def end_session_view(request, session_id):
 
     return redirect('recognition:session_detail', session_id=session_id)
 
-
-
 def sessions_list(request):
     sessions = Session.objects.all().order_by('-start_time')
     
     # Get active session information
-    active_session_info = []
+    active_session_info = {}
     for session_id, session_data in active_recognition.items():
         try:
             session_obj = Session.objects.get(id=session_id)
-            active_session_info.append({
-                'id': session_id,
+            active_session_info[str(session_id)] = {
                 'is_active': session_data.get("thread") and session_data["thread"].is_alive(),
                 'mode': session_data.get("mode", "unknown")
-            })
+            }
         except (Session.DoesNotExist, ValueError):
             # Clean up invalid entries
             active_recognition.pop(session_id, None)
@@ -387,7 +358,6 @@ def sessions_list(request):
         'active_session_info': active_session_info
     }
     return render(request, 'recognition/session_list.html', context)
-
 
 def get_active_sessions(request):
     """Get list of currently active sessions"""
