@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.template.loader import render_to_string
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.core.cache import cache
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import get_face_encodings
 from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, Student
@@ -44,6 +45,8 @@ def enroll_view(request):
     if request.method == 'POST':
         form = StudentForm(request.POST)
         face_images = request.FILES.getlist('face_images')
+        progress_key = f"enroll_progress_{request.session.session_key}"
+        cache.set(progress_key, 0, timeout=600)
 
         # Validate uploaded images
         if not face_images:
@@ -52,8 +55,8 @@ def enroll_view(request):
         if form.is_valid():
             ref_encoding = None
             valid_encodings = []
-
-            for image in face_images:
+            total = len(face_images)
+            for idx, image in enumerate(face_images):
                 img_bytes = image.read()
                 np_arr = np.frombuffer(img_bytes, np.uint8)
                 img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -79,6 +82,9 @@ def enroll_view(request):
 
                 valid_encodings.append((image.name, encodings[0]))
 
+                # Update progress in cache
+                cache.set(progress_key, int((idx + 1) / total * 100), timeout=600)
+
             # Only save the form if we have valid encodings AND no errors
             if valid_encodings and not form.errors:
                 student = form.save()
@@ -99,13 +105,22 @@ def enroll_view(request):
                 if not valid_encodings:
                     form.add_error(None, 'No valid encodings were saved.')
 
+        # Reset progress on finish
+        cache.set(progress_key, 100, timeout=600)
     else:
         form = StudentForm()
+        # Reset progress on GET
+        progress_key = f"enroll_progress_{request.session.session_key}"
+        cache.set(progress_key, 0, timeout=600)
 
-    context = {
-        'form': form,
-    }
+    context = {'form': form}
     return render(request, 'recognition/enroll.html', context)
+
+# Add a view to return progress
+def enroll_progress(request):
+    progress_key = f"enroll_progress_{request.session.session_key}"
+    progress = cache.get(progress_key, 0)
+    return JsonResponse({'progress': progress})
 
 def enroll_success(request):
     return render(request, 'recognition/enroll_success.html')
