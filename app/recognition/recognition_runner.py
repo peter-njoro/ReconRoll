@@ -159,7 +159,7 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
     print("🎉 Recognition finished.")
 
 def run_main_py_dev_mode(session_id, stop_flag):
-    """Run main.py as a subprocess for dev mode"""
+    """Run main.py as a subprocess for dev mode with native OpenCV window"""
     print(f"🔧 Starting main.py in dev mode for session {session_id}")
 
     # Build command to run main.py
@@ -169,12 +169,12 @@ def run_main_py_dev_mode(session_id, stop_flag):
         '--session-id', str(session_id)
     ]
 
-    # Start the subprocess
+    # Start the subprocess without piping stdout/stderr
     process = subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
+        stdout=None,
+        stderr=None,
+        stdin=None
     )
 
     # Store process reference for stopping
@@ -195,12 +195,7 @@ def run_main_py_dev_mode(session_id, stop_flag):
                 print(f"main.py process ended with return code: {process.returncode}")
                 break
 
-            # Read and log output
-            output = process.stdout.readline()
-            if output:
-                print(f"[main.py] {output.strip()}")
-
-            threading.Event().wait(0.1)  # Small delay
+            threading.Event().wait(0.5)  # Small delay
 
         # Clean up
         if str(session_id) in active_recognition:
