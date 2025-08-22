@@ -178,3 +178,6 @@ app/static/*
 app/recognition/uploads/unidentified/*
 app/recognition/uploads/*
 app/media/uploads/unidentified/*
+
+
+app/media/*
