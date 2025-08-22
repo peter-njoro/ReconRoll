@@ -20,12 +20,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-^)6p6qfzg&2^!ej3+f!$&fo)qh^k^^nan*g6dlf)ca^*yx_nh6'
+# SECRET_KEY = 'django-insecure-^)6p6qfzg&2^!ej3+f!$&fo)qh^k^^nan*g6dlf)ca^*yx_nh6'
+SECRET_KEY = os.environ.get("SECRET_KEY", "default-dev-secret-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost 127.0.0.1 [::1]").split()
 
 
 # Application definition
@@ -81,11 +82,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB", "facetrack_db"),
+        "USER": os.environ.get("POSTGRES_USER", "facetrack"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "facetrack"),
+        "HOST": os.environ.get("DB_HOST", "db"),  # service name from docker-compose
+        "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }
+
 
 
 # Password validation
@@ -122,8 +128,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_URL = '/static/'
+STATIC_ROOT = '/vol/static/'
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -134,6 +143,15 @@ AUTH_USER_MODEL = 'users.CustomUser'
 
 LOGIN_URL = "/users/login/"
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+STATIC_ROOT = "/vol/static"
+MEDIA_ROOT = "/vol/media"
+
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+CSRF_TRUSTED_ORIGINS = [ "http://localhost", "http://127.0.0.1", "http://facetrack.com" ]
+
+
 
