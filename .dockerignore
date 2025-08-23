@@ -127,3 +127,5 @@ local.txt
 # Ignore collected static/media (volumes will be used)
 staticfiles/
 media/
+
+app/media/*
