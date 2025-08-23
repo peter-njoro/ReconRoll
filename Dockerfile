@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y \
     gosu \
     sudo \
     cmake \
+    v4l-utils \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
     libsm6 \
     libxext6 \
     libxrender-dev \
@@ -38,7 +42,6 @@ RUN mkdir -p /vol/static /vol/media /var/log/uwsgi && \
     chmod -R 777 /var/log/uwsgi
 
 # copy application files
-COPY ./app /app
 COPY ./scripts/scripts.sh /scripts/scripts.sh
 RUN chmod +x /scripts/scripts.sh
 

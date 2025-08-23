@@ -15,4 +15,11 @@ setuptools==80.9.0
 sqlparse==0.5.3
 uwsgi>=2.0.23
 psycopg[binary]
+certifi==2025.8.3
+charset-normalizer==3.4.3
+djangorestframework==3.16.1
+idna==3.10
+requests==2.32.5
+tzdata==2025.2
+urllib3==2.5.0
 

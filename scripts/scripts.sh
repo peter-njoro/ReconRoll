@@ -57,6 +57,13 @@ else
     echo "Superuser creation skipped."
 fi
 
+# If FRAME_FORWARDER is enabled, run webcam_stream.py in background
+if [ "$FRAME_FORWARDER" = "true" ]; then
+    echo "Starting webcam_stream.py for frame forwarding..."
+    python recognition/webcam_stream.py &
+fi
+
+
 # echo "Starting uWSGI server..."
 exec uwsgi --chdir /app \
     --module config.wsgi:application \
@@ -65,6 +72,9 @@ exec uwsgi --chdir /app \
     --threads 2 \
     --http 0.0.0.0:8000 \
     --static-map /static=/vol/static \
-    --static-map /media=/vol/media
-
+    --static-map /media=/vol/media \
+    --harakiri 0 \
+    --http-timeout 600 \
+    --socket-timeout 600 \
+    --buffer-size=65535
 

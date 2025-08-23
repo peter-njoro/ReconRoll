@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:15
+    container_name: facetrack-db
+    environment:
+      POSTGRES_USER: facetrack
+      POSTGRES_PASSWORD: facetrack
+      POSTGRES_DB: facetrack_db
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  facetrack:
+    image: fastundra/facetrack-lite-facetrack:latest
+    container_name: facetrack-lite
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+      - static_volume:/vol/static
+      - media_volume:/vol/media
+    env_file:
+      - .env
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://facetrack:facetrack@db:5432/facetrack_db
+      DJANGO_SETTINGS_MODULE: config.settings
+      FACE_MODEL: hog
+      SCALE: "0.25"
+      MIN_FACE_SIZE: "100"
+      TOLERANCE: "0.55"
+      FRAME_FORWARDER: "true"
+    command: sh -c "/scripts/scripts.sh"
+    stdin_open: true
+    tty: true
+    privileged: true
+
+volumes:
+  static_volume:
+  media_volume:
+  db_data:

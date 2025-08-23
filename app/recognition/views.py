@@ -8,13 +8,14 @@ from threading import Thread
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.template.loader import render_to_string
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404, reverse
 from django.core.cache import cache
 from recognition.forms import StudentForm, SessionForm
-from recognition.face_utils import get_face_encodings
+from recognition.face_utils import get_face_encodings, annotate_frame
 from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, Student
 from recognition.recognition_runner import run_recognition, active_recognition
 
@@ -28,6 +29,33 @@ TARGET_FPS = 30
 PROCESS_EVERY_N_FRAMES = 3
 CARD_DISPLAY_FRAMES = 10
 MIN_FACE_SIZE = 100
+
+@csrf_exempt
+def upload_frame(request):
+    if request.method == "POST" and request.FILES.get("frame"):
+        file = request.FILES["frame"].read()
+        np_arr = np.frombuffer(file, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        # 🔹 Detect & encode faces
+        face_locations = face_recognition.face_locations(frame, model="hog")
+        face_encodings = face_recognition.face_encodings(frame, face_locations)
+
+        # For now: dummy labels
+        face_names = ["unknown"] * len(face_encodings)
+
+        # 🔹 Annotate the frame
+        annotated = annotate_frame(frame, face_locations, face_names, face_encodings)
+
+        # If you want JSON response (not the annotated image)
+        results = [
+            {"name": name, "box": loc}
+            for name, loc in zip(face_names, face_locations)
+        ]
+
+        return JsonResponse({"status": "ok", "results": results})
+
+    return JsonResponse({"status": "error", "message": "No frame received"}, status=400)
 
 def index(request):
     context = {

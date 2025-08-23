@@ -29,4 +29,7 @@ urlpatterns = [
     path('session/<uuid:session_id>/absent_partial/', views.session_absent_students_partial, name='session_absent_partial'),
     path('session/<uuid:session_id>/unidentified_partial/', views.session_unidentified_faces_partial, name='session_unidentified_partial'),
     path('session/<uuid:session_id>/progress_partial/', views.recognition_progress_partial, name='recognition_progress_partial'),
+
+    # frame fowarding for windows
+    path("api/upload_frame/", views.upload_frame, name="upload_frame"),
 ]
