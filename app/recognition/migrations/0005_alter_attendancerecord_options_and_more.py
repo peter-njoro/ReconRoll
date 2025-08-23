@@ -48,6 +48,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterUniqueTogether(
             name='attendancerecord',
-            unique_together={('student', 'student')},
+            unique_together={('session', 'student')},
         ),
     ]
