@@ -13,3 +13,5 @@ opencv-python-headless==4.11.0.86
 pillow==11.2.1
 setuptools==80.9.0
 sqlparse==0.5.3
+uwsgi>=2.0.23
+
