@@ -69,14 +69,20 @@ If you want this thing running without sacrificing your sanity (especially you W
 2. Build the image (aka, watch text scroll like in The Matrix):
 
    ```bash
-   docker compose build
+   docker compose build # only if you are in development
    ```
 
 3. Start the containers (aka, let Docker babysit your dependencies):
 
+   on windows:
    ```bash
-   docker compose up
+   docker compose -f docker-compose.windows.yml up
    ```
+   on linux (for legends and honestly works better😎)
+   ```bash
+   docker compose -f docker-compose.linux.yml up
+   ```
+   why do I have two docker compose files for windows and linux? well, it's because this beast requires specified hardware access (webcam) on both operating systems, and I use both😂💀
 
 4. Visit the app at:
 
