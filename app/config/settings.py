@@ -87,7 +87,7 @@ DATABASES = {
         "NAME": os.environ.get("POSTGRES_DB", "facetrack_db"),
         "USER": os.environ.get("POSTGRES_USER", "facetrack"),
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "facetrack"),
-        "HOST": os.environ.get("DB_HOST", "db"),  # service name from docker-compose
+	"HOST": os.environ.get("DB_HOST", "db"),
         "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }

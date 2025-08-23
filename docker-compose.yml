@@ -14,14 +14,14 @@ services:
       context: .
     container_name: facetrack-lite
     ports:
-      - "80:8000"
+      - "8000:8000"
     volumes:
       - ./app:/app
       - static_volume:/vol/static
       - media_volume:/vol/media
 
     env_file:
-      - .env 
+      - .env
 
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
@@ -32,6 +32,8 @@ services:
     command: sh -c "/scripts/scripts.sh"
     stdin_open: true
     tty: true
+    devices:
+      - "/dev/video0:/dev/video0"
 
 volumes:
   static_volume:
