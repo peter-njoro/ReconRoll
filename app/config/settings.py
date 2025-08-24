@@ -77,11 +77,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
+database_environment = os.environ.get("DATABASE", "sqlite")
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-DATABASES = {
+if database_environment == "postgres":
+    print("Using Postgres Database")
+    DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.environ.get("POSTGRES_DB", "facetrack_db"),
@@ -89,8 +89,19 @@ DATABASES = {
         "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "facetrack"),
 	    "HOST": os.environ.get("DB_HOST", "db"),
         "PORT": os.environ.get("DB_PORT", "5432"),
+        }
     }
-}
+else:
+    print("Using SQLite Database")
+    DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+# Database
+# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
 
 
 

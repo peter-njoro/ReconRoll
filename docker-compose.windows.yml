@@ -30,6 +30,7 @@ services:
       MIN_FACE_SIZE: "100"
       TOLERANCE: "0.55"
       FRAME_FORWARDER: "true"
+      DATABASE: "postgres"
     command: sh -c "/scripts/scripts.sh"
     stdin_open: true
     tty: true
