@@ -102,7 +102,7 @@ If you hate yourself and want to spend hours debugging `pip install` errors, her
 
    ```bash
    git clone https://github.com/peter-njoro/facetrack-lite.git
-   cd facetrack-lite/app
+   cd facetrack-lite
    ```
 
 2. Create your virtual bubble:
@@ -127,6 +127,7 @@ If you hate yourself and want to spend hours debugging `pip install` errors, her
 5. Fire up Django:
 
    ```bash
+   cd app
    python manage.py runserver
    ```
 
