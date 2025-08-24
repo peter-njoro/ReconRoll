@@ -82,8 +82,12 @@ If you want this thing running without sacrificing your sanity (especially you W
    ```bash
    docker compose -f docker-compose.linux.yml up
    ```
-   why do I have two docker compose files for windows and linux? well, it's because this beast requires specified hardware access (webcam) on both operating systems, and I use both😂💀
+   
+why do I have two docker compose files for windows and linux? well, it's because this beast requires specified hardware access (webcam) on both operating systems, and I use both😂💀
+   
+   
 
+Ps: I tried making docker with camera but it wasn't working just go the normal route I advice not to use docker for now. (sorry!🥹)
 4. Visit the app at:
 
    ```

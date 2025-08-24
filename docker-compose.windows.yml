@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17
+    image: postgres:15
     container_name: facetrack-db
     environment:
       POSTGRES_USER: facetrack
