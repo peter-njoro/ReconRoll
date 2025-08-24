@@ -10,8 +10,7 @@ services:
       - db_data:/var/lib/postgresql/data
 
   facetrack:
-    build:
-      context: .
+    image: fastundra/facetrack-lite:latest
     container_name: facetrack-lite
     ports:
       - "8000:8000"
