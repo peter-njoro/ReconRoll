@@ -58,10 +58,10 @@ else
 fi
 
 # If FRAME_FORWARDER is enabled, run webcam_stream.py in background
-if [ "$FRAME_FORWARDER" = "true" ]; then
-    echo "Starting webcam_stream.py for frame forwarding..."
-    python recognition/webcam_stream.py &
-fi
+# if [ "$FRAME_FORWARDER" = "true" ]; then
+#     echo "Starting webcam_stream.py for frame forwarding..."
+#     python recognition/webcam_stream.py &
+# fi
 
 
 # echo "Starting uWSGI server..."
