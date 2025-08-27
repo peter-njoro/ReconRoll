@@ -56,7 +56,7 @@ Use it for:
 ## 📦 How to Run This Beast
 
 ### Before you run it, check out this document [here](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing).  
-It explains what needs to be installed on your computer.  
+It is a pre-installation guide that explains what needs to be installed on your computer.  
 If you’ve already read it — congrats! Yoo! 🎉
 
 ### 🚀 Recommended: With Docker (a.k.a. The Way of the Lazy Genius)
