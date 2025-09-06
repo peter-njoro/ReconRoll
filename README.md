@@ -55,6 +55,10 @@ Use it for:
 
 ## 📦 How to Run This Beast
 
+### Before you run it, check out this document [here](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing).  
+It is a pre-installation guide that explains what needs to be installed on your computer.  
+If you’ve already read it — congrats! Yoo! 🎉
+
 ### 🚀 Recommended: With Docker (a.k.a. The Way of the Lazy Genius)
 
 If you want this thing running without sacrificing your sanity (especially you Windows users 🫵), use Docker.
@@ -88,7 +92,8 @@ why do I have two docker compose files for windows and linux? well, it's because
    
 
 Ps: I tried making docker with camera but it wasn't working just go the normal route I advice not to use docker for now. (sorry!🥹)
-4. Visit the app at:
+
+   4. Visit the app at:
 
    ```
    http://localhost:8000
@@ -125,13 +130,13 @@ If you hate yourself and want to spend hours debugging `pip install` errors, her
 4. Run migrations like a true Django disciple:
 
    ```bash
+   cd app
    python manage.py migrate
    ```
 
 5. Fire up Django:
 
    ```bash
-   cd app
    python manage.py runserver
    ```
 
