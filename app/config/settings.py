@@ -80,7 +80,6 @@ WSGI_APPLICATION = 'config.wsgi.application'
 database_environment = os.environ.get("DATABASE", "sqlite")
 
 if database_environment == "postgres":
-    print("Using Postgres Database")
     DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -92,7 +91,6 @@ if database_environment == "postgres":
         }
     }
 else:
-    print("Using SQLite Database")
     DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
