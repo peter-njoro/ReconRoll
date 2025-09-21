@@ -1,124 +1,101 @@
-# 👁️‍🗨️ FaceTrack Lite — Because Who Even Remembers Faces Anymore?
+# 👁️‍🔡 FaceTrack Lite
 
-Welcome to **FaceTrack Lite** — the facial recognition attendance system you *didn't* ask for but will definitely flex on your portfolio anyway.
+**FaceTrack Lite** is a lightweight facial recognition attendance system built with **Django** and **OpenCV**. It allows schools, events, and organizations to automate attendance tracking by detecting, recognizing, and logging faces in real time.
 
-Because hey, **why remember a face** when you can just **slave your life away building a complex computer vision system** to do it for you? 😩
-
-So you’re telling me… you *could* remember faces like a normal functioning human being?
-Nah fam, let’s **build software that stalks—I mean, tracks—people's faces** for attendance instead.
-Work smarter, not... human-er 🤖.
-
-This project is part of a bigger thing called **Virone**, brainchild of the one and only [Everlyne Mwangi](https://github.com/everlyne-dotcom) (yes, that Everlyne — check her GitHub later in the repo). It’s just a small taste of what Virone aims to achieve.
+This project is part of a larger initiative called **Virone**, originally envisioned by [Everlyne Mwangi](https://github.com/everlyne-dotcom). FaceTrack Lite is a demonstration of the potential within that broader vision.
 
 ---
 
-## 💡 What Is This?
+## 💡 Overview
 
-FaceTrack Lite is a ✨*lite*✨, *super chill* (and by chill we mean "I lost sleep building this") AI-powered facial recognition attendance system. For schools, events, or anywhere people show up (reluctantly or otherwise). It detects, recognizes, and tracks faces like it’s auditioning for *Black Mirror* Season 6.
+FaceTrack Lite provides:
 
-Use it for:
+* Real-time face detection and recognition
+* Attendance logging and reporting
+* Capture of unidentified faces for later review
+* Admin and web dashboards for easy management
+* Offline functionality
 
-* 👨‍🏫 Schools (because taking roll call is sooo 2001)
-* 🎟️ Events (badge scanners are out, facial scans are in)
-* 🧍 Flexing on LinkedIn (be honest)
-
----
-
-## ⚙️ Tech Stack (a.k.a. My Red Flags)
-
-| Tool                  | Why I Used It                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| `Python`  🐍          | Duh. I'm not a monster.                                                              |
-| `OpenCV`    👁️       | Because staring at pixel arrays is a lifestyle.                                      |
-| `face_recognition` 🎭 | Like OpenCV but with vibes and pre-trained models. Built on dlib, and dlib don’t lie |
-| `Django`    🔥        | To give the illusion of structure.                                                   |
-| `SQLite`     🪨       | Because we broke broke (but portable).                                               |
-| `Bootstrap 5` 💅      | For that mid-tier “I tried” UI aesthetic                                             |
-| `JavaScript` ☕        | Yeah, that’s still around                                                            |
-
-> May or may not work on Windows without 19 dependencies and a small prayer.
+It is designed to be portable, lightweight, and suitable for demos, small-scale deployments, and educational purposes.
 
 ---
 
-## 🔥 Features (aka What I Cried Over)
+## ⚙️ Tech Stack
 
-* 👁️ Real-time face detection (yes, *real* real-time)
-* 🧠 Facial recognition with `face_recognition` library
-* 🧾 Logs attendance like a passive-aggressive teacher
-* 📸 Captures unknown faces so you can stalk—I mean, investigate
-* 🧊 Works offline, because we touch grass
-* 🎨 Web dashboard (because CLI is so 2004)
-* 🗂️ Admin dashboard (for The One Person in control)
-* 📸 Face enrollment (yes, your face now lives in the Matrix)
+| Tool               | Purpose                                     |
+| ------------------ | ------------------------------------------- |
+| `Python`           | Core language for development               |
+| `OpenCV`           | Computer vision and image processing        |
+| `face_recognition` | Facial recognition powered by dlib          |
+| `Django`           | Web framework for structure and scalability |
+| `SQLite`           | Lightweight, portable database              |
+| `Bootstrap 5`      | Frontend styling                            |
+| `JavaScript`       | Client-side interactivity                   |
 
 ---
 
-## 📦 How to Run This Beast
+## 🔥 Features
 
-### Before you run it, check out this document [here](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing).  
-It is a pre-installation guide that explains what needs to be installed on your computer.  
-If you’ve already read it — congrats! Yoo! 🎉
+* 👁️ Real-time face detection
+* 🧠 Facial recognition with pre-trained models
+* 🧾 Automated attendance logging
+* 📸 Capture of unknown faces for later review
+* 🗂️ Admin and web dashboards
+* 🌨 Face enrollment system
+* 🦨 Offline support
 
-### 🚀 Recommended: With Docker (a.k.a. The Way of the Lazy Genius)
+---
 
-If you want this thing running without sacrificing your sanity (especially you Windows users 🫵), use Docker.
+## 📦 Installation & Setup
 
-1. Clone the repo:
+Before running the project, please review the **[Pre-Installation Guide](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing)**.
+
+### 🚀 Run with Docker (recommended)
+
+1. Clone the repository:
 
    ```bash
    git clone https://github.com/peter-njoro/facetrack-lite.git
    cd facetrack-lite
    ```
 
-2. Build the image (aka, watch text scroll like in The Matrix):
+2. Build the image:
 
    ```bash
-   docker compose build # only if you are in development
+   docker compose build
    ```
 
-3. Start the containers (aka, let Docker babysit your dependencies):
+3. Start the containers:
 
-   on windows:
    ```bash
+   # For Linux
+   docker compose -f docker-compose.linux.yml up
+
+   # For Windows
    docker compose -f docker-compose.windows.yml up
    ```
-   on linux (for legends and honestly works better😎)
-   ```bash
-   docker compose -f docker-compose.linux.yml up
-   ```
-   
-why do I have two docker compose files for windows and linux? well, it's because this beast requires specified hardware access (webcam) on both operating systems, and I use both😂💀
-   
-   
 
-Ps: I tried making docker with camera but it wasn't working just go the normal route I advice not to use docker for now. (sorry!🥹)
-
-   4. Visit the app at:
+4. Access the app at:
 
    ```
    http://localhost:8000
    ```
 
-🎉 Congrats, you’re running FaceTrack Lite like a civilized person.
+### 🛠️ Run without Docker (manual setup)
 
----
-
-### 🛠️ Alternative: Without Docker (for the Nerdy Gooners)
-
-If you hate yourself and want to spend hours debugging `pip install` errors, here’s how:
-
-1. Clone this repo:
+1. Clone the repository:
 
    ```bash
    git clone https://github.com/peter-njoro/facetrack-lite.git
    cd facetrack-lite
    ```
 
-2. Create your virtual bubble:
+2. Create and activate a virtual environment:
 
    ```bash
    python -m venv venv
-   source venv/bin/activate  # or venv\Scripts\activate on Windows, you rebel
+   source venv/bin/activate  # Linux/macOS
+   venv\Scripts\activate     # Windows
    ```
 
 3. Install dependencies:
@@ -127,103 +104,80 @@ If you hate yourself and want to spend hours debugging `pip install` errors, her
    pip install -r requirements.txt
    ```
 
-4. Run migrations like a true Django disciple:
+4. Run database migrations:
 
    ```bash
-   cd app
    python manage.py migrate
    ```
 
-5. Fire up Django:
+5. Start the server:
 
    ```bash
    python manage.py runserver
    ```
 
-6. Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and bask in your hard-earned suffering.
+6. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ---
 
-## 📷 How It Works (Simplified for Scroll-Happy Folks)
+## 📷 How It Works
 
-1. Camera turns on (consensually).
+1. Camera captures input.
 2. Face is detected.
-3. Face is recognized (or silently judged).
-4. Attendance is logged.
-5. Everyone claps. 🎉
+3. Face is recognized or marked as unknown.
+4. Attendance is logged automatically.
 
 ---
 
-## 🗂️ Folder Structure (aka Where the Chaos Lives)
+## 🗂️ Project Structure
 
 ```bash
 facetrack-lite/
-├── app
-│   ├── config/                         # Django project settings
-│   ├── face_recognition_models/        # Pretrained models for detection
-│   ├── manage.py                       # Django boss baby
-│   ├── recognition/                    # Face recognition app
-│   │   ├── admin.py
-│   │   ├── apps.py
-│   │   ├── face_utils.py               # All the OpenCV/dlib sorcery
-│   │   ├── forms.py
-│   │   ├── main.py                     # The chaos engine
-│   │   ├── models.py
-│   │   ├── recognition_runner.py       # Orchestrates recognition
-│   │   ├── static/recognition/         # CSS + JS + vibes
-│   │   ├── templates/recognition/      # HTML templates
-│   │   ├── test_loading.py
-│   │   ├── test_opencv.py
-│   │   ├── urls.py
-│   │   ├── utils/                      # Small helpers
-│   │   ├── video_utils.py
-│   │   └── views.py
-│   └── users/                          # Auth app (login/signup)
-│       ├── admin.py
-│       ├── forms.py
-│       ├── models.py
-│       ├── urls.py
-│       └── views.py
-├── docker-compose.yml                  # Docker babysitter config
-├── Dockerfile                          # Instructions for your container overlord
-├── LICENSE                             # Because lawyers
-├── qodana.yaml                         # Linting/config for JetBrains enjoyers
-├── README.md                           # This very scroll
-├── requirements.txt                    # All the dependencies you’ll forget
-└── scripts/scripts.sh                  # Script automation magic
+├── config/                  # Django project settings
+├── recognition/             # Face recognition app
+│   ├── face_utils.py        # OpenCV/dlib logic
+│   ├── models.py            # Database models
+│   ├── views.py             # Django views
+│   ├── templates/           # HTML templates
+│   └── static/              # CSS & JS
+├── docker-compose.yml        # Docker configuration
+├── Dockerfile                # Docker build instructions
+├── requirements.txt          # Dependencies
+└── README.md                 # This document
 ```
 
 ---
 
 ## 🤝 Contributing
 
-Want to contribute? Fork this repo, make your changes, and submit a pull request to the **development** branch.
+Contributions are welcome!
 
-(Or wait till I decide if I want a CONTRIBUTING.md file — whichever comes first.)
+* Fork the repo
+* Create a feature branch
+* Submit a pull request to the **development** branch
 
 ---
 
 ## 🚨 Disclaimer
 
-This project is for **educational & demo purposes**.
-Yes, there’s sarcasm in the code, in the UI, and in this README. Don’t panic — your data is safe, I literally can’t access it even if I wanted to.
-
-Please don’t build Skynet with this. But if you do, at least star the repo first ⭐.
+This project is for **educational and demo purposes only**.
+It is not production-ready and should not be used in sensitive or large-scale deployments without further development and security hardening.
 
 ---
 
-## 🫡 Author
+## 🪡 Author
 
-Made by [Peter](https://github.com/peter-njoro) —
-Professional overthinker, part-time wizard, and full-time developer (uses Arch btw 🗿).
-
-Big thanks to **Everlyne Mwangi** for inspiring this as part of the bigger **Virone** project.
+Developed by [Peter](https://github.com/peter-njoro).
+Special thanks to [Everlyne Mwangi](https://github.com/everlyne-dotcom) for inspiring the project as part of the larger **Virone** vision.
 
 ---
 
-## ✨ Final Thoughts
+## 📝 Developer Notes
 
-Run it. Flex it. Show it off. Confuse your friends. Impress recruiters.
-Whatever works 🤷.
+If you’ve scrolled this far — welcome to the part where I sneak in my personality:
 
-Peace out ✌️
+* Yes, I cried over `pip install` errors.
+* Docker was supposed to save my sanity, but webcams had other plans.
+* This project is both a demo and a flex. Use responsibly.
+* I may or may not use Arch Linux 🟟o.
+* If this ends up running Skynet… at least
