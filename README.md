@@ -1,4 +1,4 @@
-# 👁️‍🔡 FaceTrack Lite
+# FaceTrack Lite
 
 **FaceTrack Lite** is a lightweight facial recognition attendance system built with **Django** and **OpenCV**. It allows schools, events, and organizations to automate attendance tracking by detecting, recognizing, and logging faces in real time.
 
@@ -6,7 +6,7 @@ This project is part of a larger initiative called **Virone**, originally envisi
 
 ---
 
-## 💡 Overview
+## Overview
 
 FaceTrack Lite provides:
 
@@ -20,7 +20,7 @@ It is designed to be portable, lightweight, and suitable for demos, small-scale 
 
 ---
 
-## ⚙️ Tech Stack
+## Tech Stack
 
 | Tool               | Purpose                                     |
 | ------------------ | ------------------------------------------- |
@@ -34,23 +34,23 @@ It is designed to be portable, lightweight, and suitable for demos, small-scale 
 
 ---
 
-## 🔥 Features
+## Features
 
-* 👁️ Real-time face detection
-* 🧠 Facial recognition with pre-trained models
-* 🧾 Automated attendance logging
-* 📸 Capture of unknown faces for later review
-* 🗂️ Admin and web dashboards
-* 🌨 Face enrollment system
-* 🦨 Offline support
+* Real-time face detection
+* Facial recognition with pre-trained models
+* Automated attendance logging
+* Capture of unknown faces for later review
+* Admin and web dashboards
+* Face enrollment system
+* Offline support
 
 ---
 
-## 📦 Installation & Setup
+## Installation & Setup
 
 Before running the project, please review the **[Pre-Installation Guide](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing)**.
 
-### 🚀 Run with Docker (recommended)
+### Run with Docker (recommended)
 
 1. Clone the repository:
 
@@ -81,7 +81,7 @@ Before running the project, please review the **[Pre-Installation Guide](https:/
    http://localhost:8000
    ```
 
-### 🛠️ Run without Docker (manual setup)
+### Run without Docker (manual setup)
 
 1. Clone the repository:
 
@@ -120,7 +120,7 @@ Before running the project, please review the **[Pre-Installation Guide](https:/
 
 ---
 
-## 📷 How It Works
+## How It Works
 
 1. Camera captures input.
 2. Face is detected.
@@ -129,7 +129,7 @@ Before running the project, please review the **[Pre-Installation Guide](https:/
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```bash
 facetrack-lite/
@@ -148,7 +148,7 @@ facetrack-lite/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome!
 
@@ -158,21 +158,21 @@ Contributions are welcome!
 
 ---
 
-## 🚨 Disclaimer
+## Disclaimer
 
 This project is for **educational and demo purposes only**.
 It is not production-ready and should not be used in sensitive or large-scale deployments without further development and security hardening.
 
 ---
 
-## 🪡 Author
+## Author
 
 Developed by [Peter](https://github.com/peter-njoro).
 Special thanks to [Everlyne Mwangi](https://github.com/everlyne-dotcom) for inspiring the project as part of the larger **Virone** vision.
 
 ---
 
-## 📝 Developer Notes
+## Developer Notes
 
 If you’ve scrolled this far — welcome to the part where I sneak in my personality:
 
