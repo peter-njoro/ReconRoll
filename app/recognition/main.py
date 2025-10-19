@@ -74,7 +74,7 @@ def main():
     try:
         # Load encodings
         known_face_encodings, known_face_names = load_known_encodings_from_db()
-        print(f"✅ Loaded {len(known_face_encodings)} known encodings")
+        print(f"Loaded {len(known_face_encodings)} known encodings")
 
         # Load detector
         try:
@@ -85,7 +85,7 @@ def main():
 
         cap = start_video_capture(fps=target_fps)
         if not cap.isOpened():
-            print("❌ Failed to open camera")
+            print("Failed to open camera")
             return
 
         frame_count = 0
