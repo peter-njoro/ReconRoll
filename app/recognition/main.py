@@ -81,7 +81,7 @@ def main():
             net = safe_load_dnn_model()
         except Exception:
             net = None
-            print("⚠ Falling back to HOG")
+            print("Falling back to HOG")
 
         cap = start_video_capture(fps=target_fps)
         if not cap.isOpened():
@@ -93,7 +93,7 @@ def main():
         fps_history = []
         recognition_history = deque(maxlen=10)
 
-        print("🎥 Webcam started - Press 'q' to quit...")
+        print("Webcam started - Press 'q' to quit...")
 
         while cap.isOpened():
             ret, frame = cap.read()

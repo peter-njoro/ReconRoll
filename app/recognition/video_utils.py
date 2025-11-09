@@ -9,7 +9,7 @@ def start_video_capture(width=640, height=480, fps=30, buffer_size=2, device_ind
     cap = cv2.VideoCapture(device_index)  # No backend forced
 
     if not cap.isOpened():
-        print("❌ Failed to open webcam.")
+        print("Failed to open webcam.")
         return None
 
     # Try setting camera properties
@@ -23,7 +23,7 @@ def start_video_capture(width=640, height=480, fps=30, buffer_size=2, device_ind
     actual_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     actual_fps = cap.get(cv2.CAP_PROP_FPS)
 
-    print(f"📷 Webcam initialized at {int(actual_width)}x{int(actual_height)} @ {actual_fps:.2f} FPS")
+    print(f"Webcam initialized at {int(actual_width)}x{int(actual_height)} @ {actual_fps:.2f} FPS")
     return cap
 
 def calculate_fps(prev_time, fps_history, max_history=10):
