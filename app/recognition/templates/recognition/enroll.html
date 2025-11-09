@@ -10,14 +10,12 @@
         <div class="col-md-8 col-lg-6">
             <div class="card shadow-lg p-4">
                 <div class="card-body text-center">
-                    <!-- Page Header -->
-                    <h2 class="card-title mb-4 fw-bold">Face Enrollment 😎</h2>
+
+                    <h2 class="card-title mb-4 fw-bold">Face Enrollment</h2>
                     <p class="text-muted mb-4">
-                        Yes, your beautiful face is about to be stored in a database.  
-                        Don’t worry, we pinky promise not to sell it to Skynet (yet). 🤖
+                        This process will store your face data for attendance purposes. Your information stays within the system.
                     </p>
 
-                    <!-- Enroll Form -->
                     <form method="post" enctype="multipart/form-data" class="text-start">
                         {% csrf_token %}
                         {% bootstrap_form form %}
@@ -26,20 +24,17 @@
                             <label class="form-label fw-semibold">Upload face images:</label>
                             <input type="file" name="face_images" multiple required class="form-control">
                             <div class="form-text">
-                                Pro tip: upload more than one pic… unless you want the AI  
-                                to think you only exist in bad lighting 💡.
+                                For best results, upload several clear images in different lighting conditions.
                             </div>
                         </div>
 
                         <div class="d-grid">
-                            {% bootstrap_button button_type="submit" content="🚀 Enroll Student" %}
+                            {% bootstrap_button button_type="submit" content="Enroll Student" %}
                         </div>
                     </form>
 
-                    <!-- Goofy Disclaimer -->
                     <p class="mt-4 text-muted small">
-                        ⚠️ Warning: enrolling here means your attendance excuses officially  
-                        enter the <em>denied zone</em>. RIP "I was totally in class" 💀.
+                        Once enrolled, your attendance will be tracked automatically during active sessions.
                     </p>
                 </div>
             </div>
@@ -47,7 +42,6 @@
     </div>
 </div>
 
-<!-- Custom Styles & Scripts -->
 <link rel="stylesheet" href="{% static 'recognition/css/enroll_loading.css' %}">
 <script src="{% static 'recognition/js/enroll_loading.js' %}"></script>
 {% endblock content %}

@@ -5,14 +5,12 @@
 
 {% block content %}
 <div class="container mt-5 text-center">
-    <!-- Title with unnecessary enthusiasm -->
-    <h2 class="fw-bold mb-3">🚀 Launching a New Session</h2>
+
+    <h2 class="fw-bold mb-3">Start a New Session</h2>
     <p class="text-muted">
-        Basically, this is where you pretend you’re in charge and click buttons like a boss.
-        Attendance about to be monitored harder than FBI watching your search history 👀.
+        Configure and begin a new attendance recognition session using the form below.
     </p>
 
-    <!-- Form Card -->
     <div class="card shadow-lg p-4 rounded-4">
         <form method="post">
             {% csrf_token %}
@@ -21,19 +19,17 @@
             </div>
 
             <button type="submit" class="btn btn-success w-100 mt-2">
-                Start Session ✅
+                Start Session
             </button>
-            <small class="text-muted d-block mt-2">
-                (Warning: Once started, the system will recognize faces faster than your grandma spotting you not eating
-                enough at dinner.)
-            </small>
 
+            <small class="text-muted d-block mt-2">
+                Once started, the session will begin processing attendance in real time.
+            </small>
         </form>
     </div>
 
-    <!-- Back home option -->
     <a href="{% url 'recognition:index' %}" class="btn btn-link mt-3">
-        ← Take me back before I regret this
+        Back to Home
     </a>
 </div>
 {% endblock content %}

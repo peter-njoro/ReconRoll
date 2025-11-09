@@ -6,8 +6,8 @@
 {% block content %}
 
 <div class="text-center home-hero">
-    <!-- Big friendly welcome -->
-    <h1 class="display-4 fw-bold mb-3">Hey guy, girl, or whoever you are 👀</h1>
+    <h1 class="display-4 fw-bold mb-3">Welcome</h1>
+
     <h2 class="fw-semibold mb-4">
         {% blocktrans with page_title=title %}Welcome to {{ page_title }}{% endblocktrans %}
     </h2>
@@ -16,7 +16,6 @@
         {% blocktrans with msg=message %}{{ msg }}{% endblocktrans %}
     </p>
 
-    <!-- Buttons with Bootstrap styling -->
     <div class="d-flex justify-content-center gap-3">
         <a href="{% url 'recognition:enroll' %}" class="btn btn-primary btn-lg">
             <i class="bi bi-person-plus"></i> Enroll
@@ -27,11 +26,9 @@
     </div>
 </div>
 
-<!-- Sarcastic footer text -->
 <div class="text-center mt-5 goofy-note">
     <p class="text-muted">
-        🚀 Disclaimer: If this site breaks, it’s not a bug... it’s a <em>feature</em>.
-        Also, yes, pressing these buttons might change your life. Or not. Who knows.
+        Disclaimer: If something here acts strange, it is probably intentional. Feel free to explore at your own pace.
     </p>
 </div>
 

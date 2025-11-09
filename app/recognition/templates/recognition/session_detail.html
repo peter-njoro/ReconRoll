@@ -14,26 +14,24 @@
 
 {% block content %}
 <!-- Session Status Alert -->
-<div class="alert alert-info shadow-sm rounded-4" id="session-status-alert" 
-     title="Yes, another alert box. Deal with it.">
+<div class="alert alert-info shadow-sm rounded-4" id="session-status-alert">
   <div class="d-flex justify-content-between align-items-center">
     <div>
       <i class="fas fa-info-circle me-2"></i>
       <span id="status-text">
         {% if session.status == 'ongoing' %}
-          Recognition is vibing in 
-          <strong>{% if is_dev_mode %}DEV (aka “please don’t break”) {% else %}PRODUCTION (serious mode) {% endif %}</strong>
+          Recognition active in 
+          <strong>{% if is_dev_mode %}DEV{% else %}PRODUCTION{% endif %}</strong>
         {% elif session.status == 'ended' %}
-          Session yeeted itself into the past 👻
+          Session has ended.
         {% else %}
-          Ready to start (aka procrastinate a little more before clicking).
+          Ready to start.
         {% endif %}
       </span>
     </div>
     {% if session.status == 'ongoing' %}
-    <div class="spinner-border spinner-border-sm" role="status" 
-         title="Spinning like your brain at 3AM...">
-      <span class="visually-hidden">Running faster than your Wi-Fi...</span>
+    <div class="spinner-border spinner-border-sm" role="status">
+      <span class="visually-hidden">Running...</span>
     </div>
     {% endif %}
   </div>
@@ -43,21 +41,20 @@
   <!-- Session Header -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-      <h1 class="h3 mb-1" title="This is what you called the session. Regret it yet?">{{ session.subject }}</h1>
+      <h1 class="h3 mb-1">{{ session.subject }}</h1>
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <span class="badge 
           {% if session.status == 'ongoing' %}bg-success
           {% elif session.status == 'ended' %}bg-secondary
-          {% else %}bg-info{% endif %}" 
-          title="Status updates faster than your crush replies.">
+          {% else %}bg-info{% endif %}">
           {{ session.status|title }}
         </span>
         {% if session.status == 'ongoing' and is_dev_mode %}
-        <span class="badge bg-warning" title="You brave soul. Running DEV mode in public. 🧪">DEV MODE 🧪</span>
+        <span class="badge bg-warning">DEV MODE</span>
         {% endif %}
-        <span class="text-muted small" title="The moment it all began.">{{ session.start_time|date:"M d, Y H:i" }}</span>
+        <span class="text-muted small">{{ session.start_time|date:"M d, Y H:i" }}</span>
         {% if session.end_time %}
-        <span class="text-muted small" title="The exact timestamp you gave up.">{{ session.end_time|date:"M d, Y H:i" }}</span>
+        <span class="text-muted small">{{ session.end_time|date:"M d, Y H:i" }}</span>
         {% endif %}
       </div>
     </div>
@@ -65,21 +62,21 @@
     <div class="btn-group" role="group">
       {% if session.status == 'ready' or session.status == 'ended' %}
       <a href="{% url 'recognition:start_session' session_id=session.id %}" 
-         class="btn btn-primary" title="Click this and pretend you know what you’re doing.">
+         class="btn btn-primary">
         <i class="fas fa-play"></i> Start Recognition
       </a>
       <a href="{% url 'recognition:start_session' session_id=session.id %}?dev=1" 
-         class="btn btn-warning" title="Test mode: for chaos only.">
+         class="btn btn-warning">
         <i class="fas fa-flask"></i> Start DEV Mode
       </a>
       {% elif session.status == 'ongoing' %}
       <a href="{% url 'recognition:end_session' session_id=session.id %}" 
-         class="btn btn-danger" title="Pull the plug. End the madness.">
+         class="btn btn-danger">
         <i class="fas fa-stop"></i> End Session
       </a>
       {% endif %}
       <a href="{% url 'recognition:sessions_list' %}" 
-         class="btn btn-outline-secondary" title="Escape hatch back to all sessions.">
+         class="btn btn-outline-secondary">
         <i class="fas fa-list"></i> Back to All Sessions
       </a>
     </div>
@@ -88,31 +85,28 @@
   <!-- Real-time Stats -->
   <div class="row mb-4" id="session-stats">
     <div class="col-md-4">
-      <div class="card bg-success text-white shadow-sm rounded-4" 
-           title="Look at these overachievers actually showing up.">
+      <div class="card bg-success text-white shadow-sm rounded-4">
         <div class="card-body text-center">
           <h5 class="card-title" id="present-count">{{ present_students|length }}</h5>
-          <p class="card-text">Present Students (the legends who showed up 🎉)</p>
+          <p class="card-text">Present Students</p>
         </div>
       </div>
     </div>
     <div class="col-md-4">
-      <div class="card bg-info text-white shadow-sm rounded-4" 
-           title="This is the dream number. Reality may differ.">
+      <div class="card bg-info text-white shadow-sm rounded-4">
         <div class="card-body text-center">
           <h5 class="card-title" id="total-expected">
             {% if session.class_group %}{{ session.class_group.students.count }}{% else %}0{% endif %}
           </h5>
-          <p class="card-text">Total Expected (aka the dream, not the reality 🤡)</p>
+          <p class="card-text">Total Expected</p>
         </div>
       </div>
     </div>
     <div class="col-md-4">
-      <div class="card bg-warning text-white shadow-sm rounded-4" 
-           title="Uh oh. New NPCs just spawned.">
+      <div class="card bg-warning text-white shadow-sm rounded-4">
         <div class="card-body text-center">
           <h5 class="card-title" id="unknown-count">{{ unidentified_faces.count }}</h5>
-          <p class="card-text">Unknown Faces (new NPCs unlocked 👾)</p>
+          <p class="card-text">Unknown Faces</p>
         </div>
       </div>
     </div>
@@ -121,26 +115,22 @@
   <!-- Tabs Navigation -->
   <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
     <li class="nav-item" role="presentation">
-      <button class="nav-link active" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab"
-              title="Drama unfolds here in real time.">
+      <button class="nav-link active" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button" role="tab">
         <i class="fas fa-history"></i> Live Events
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="present-tab" data-bs-toggle="tab" data-bs-target="#present" type="button" role="tab"
-              title="These guys actually made it. Clap for them. 👏">
+      <button class="nav-link" id="present-tab" data-bs-toggle="tab" data-bs-target="#present" type="button" role="tab">
         <i class="fas fa-user-check"></i> Present Students
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="absent-tab" data-bs-toggle="tab" data-bs-target="#absent" type="button" role="tab"
-              title="Where are they? Probably on TikTok.">
+      <button class="nav-link" id="absent-tab" data-bs-toggle="tab" data-bs-target="#absent" type="button" role="tab">
         <i class="fas fa-user-times"></i> Absent Students
       </button>
     </li>
     <li class="nav-item" role="presentation">
-      <button class="nav-link" id="unknown-tab" data-bs-toggle="tab" data-bs-target="#unknown" type="button" role="tab"
-              title="The strangers who crashed the party.">
+      <button class="nav-link" id="unknown-tab" data-bs-toggle="tab" data-bs-target="#unknown" type="button" role="tab">
         <i class="fas fa-question-circle"></i> Unknown Faces
       </button>
     </li>
@@ -148,12 +138,12 @@
 
   <!-- Tab Content -->
   <div class="tab-content p-3 border border-top-0 rounded-bottom" id="sessionTabsContent">
+
     <!-- Events Tab -->
     <div class="tab-pane fade show active" id="events" role="tabpanel">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h5>Live Session Events</h5>
-        <button class="btn btn-sm btn-outline-primary" onclick="refreshEvents()" 
-                title="If only this worked on your life choices.">
+        <button class="btn btn-sm btn-outline-primary" onclick="refreshEvents()">
           <i class="fas fa-sync"></i> Refresh
         </button>
       </div>
@@ -164,7 +154,7 @@
 
     <!-- Present Students Tab -->
     <div class="tab-pane fade" id="present" role="tabpanel">
-      <h5 class="mb-3">Present Students (legit attendance 🏆)</h5>
+      <h5 class="mb-3">Present Students</h5>
       <div id="present-students-list">
         {% include 'recognition/partials/_present_students.html' with present_students=present_students %}
       </div>
@@ -172,7 +162,7 @@
 
     <!-- Absent Students Tab -->
     <div class="tab-pane fade" id="absent" role="tabpanel">
-      <h5 class="mb-3">Absent Students (ghosting harder than your ex 👻)</h5>
+      <h5 class="mb-3">Absent Students</h5>
       <div id="absent-students-list">
         {% include 'recognition/partials/_absent_students.html' with absent_students=absent_students %}
       </div>
@@ -180,7 +170,7 @@
 
     <!-- Unknown Faces Tab -->
     <div class="tab-pane fade" id="unknown" role="tabpanel">
-      <h5 class="mb-3">Unknown Faces (plot twist characters 🕵️)</h5>
+      <h5 class="mb-3">Unknown Faces</h5>
       <div id="unknown-faces-list">
         {% include 'recognition/partials/_unidentified_faces.html' with unidentified_faces=unidentified_faces %}
       </div>
@@ -193,7 +183,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     window.SESSION_URLS = {
       stats: "{% url 'recognition:recognition_progress_partial' session_id=session.id %}",
-      events: "{% url 'recognition:session_events_partial' session_id=session.id %}", 
+      events: "{% url 'recognition:session_events_partial' session_id=session.id %}",
       present: "{% url 'recognition:session_present_partial' session_id=session.id %}",
       absent: "{% url 'recognition:session_absent_partial' session_id=session.id %}",
       unknown: "{% url 'recognition:session_unidentified_partial' session_id=session.id %}",
@@ -213,5 +203,5 @@
     }
   });
 </script>
-{% endif %}  
+{% endif %}
 {% endblock %}

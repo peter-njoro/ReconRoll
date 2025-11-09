@@ -9,15 +9,15 @@ import subprocess
 import threading
 from datetime import datetime
 
-# 🔧 Load env vars & config safely
+# Load env vars & config safely
 face_model = os.environ.get('FACE_MODEL', 'hog')
 scale = float(os.getenv('SCALE', '0.25'))
 min_size = int(os.getenv('MIN_FACE_SIZE', '100'))
 tolerance = float(os.getenv('TOLERANCE', '0.55'))
 
-print(f"✅ Using model={face_model}, scale={scale}, min_size={min_size}, tolerance={tolerance}")
+print(f"Using model={face_model}, scale={scale}, min_size={min_size}, tolerance={tolerance}")
 
-# 🛠 Setup Django
+# Setup Django
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -35,7 +35,7 @@ active_recognition = {}  # e.g., {session_id: {"thread": thread, "stop_flag": St
 
 
 def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
-    print(f"🚀 Starting recognition for session {session_id} | dev_mode={dev_mode}")
+    print(f"Starting recognition for session {session_id} | dev_mode={dev_mode}")
 
     if dev_mode:
         # Run main.py in dev mode
@@ -48,14 +48,14 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
     session = Session.objects.get(id=session_id)
     known_face_encodings, known_face_names = load_known_encodings_from_db()
-    print(f"✅ Loaded {len(known_face_encodings)} encodings")
+    print(f"Loaded {len(known_face_encodings)} encodings")
 
     # Cache for previously seen unknown encodings
     unknown_encodings = []
 
     cap = cv2.VideoCapture(video if video else 0)
     if not cap.isOpened():
-        print("❌ Failed to open video source.")
+        print("Failed to open video source.")
         return
 
     process_every_n_frames = 3
@@ -63,19 +63,19 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
     while cap.isOpened():
         if stop_flag and stop_flag.is_set():
-            print(f"🛑 Stop requested for session {session_id}")
+            print(f"Stop requested for session {session_id}")
             break
 
         ret, frame = cap.read()
         if not ret:
-            print("❌ Frame read failed or end of video.")
+            print("Frame read failed or end of video.")
             break
 
         frame_count += 1
         if frame_count % process_every_n_frames != 0:
             continue
 
-        # 🔍 Detect faces & get encodings
+        # Detect faces & get encodings
         if face_model == 'dnn':
             face_locations, face_encodings = get_face_encodings(
                 frame, model=face_model, scale=scale, min_size=min_size, dnn_net=dnn_net
@@ -88,7 +88,7 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
 
         recognition_results = []
         for i, face_encoding in enumerate(face_encodings):
-            # 🔥 Updated to 4-return version
+            # Updated to 4-return version
             name, distance, idx, is_known = matches_face_encoding(
                 face_encoding, known_face_encodings, known_face_names,
                 unknown_encodings, tolerance=tolerance
@@ -109,7 +109,7 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                                 severity='info',
                                 message=f"Student recognized: {student.full_name}"
                             )
-                            print(f"✅ Attendance marked for {student.full_name}")
+                            print(f"Attendance marked for {student.full_name}")
                 else:
                     print(f"[DEV MODE] Would mark attendance for {name}")
 
@@ -131,11 +131,11 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                                 severity='warning',
                                 message="Unidentified face captured"
                             )
-                            print("⚠ Unidentified face saved & event logged")
+                            print("Unidentified face saved & event logged")
                             if saved_encoding is not None:
                                 unknown_encodings.append(saved_encoding)
                     else:
-                        print("ℹ️ Unknown face already saved, skipping duplicate.")
+                        print("Unknown face already saved, skipping duplicate.")
                 else:
                     print("[DEV MODE] Would capture unidentified face (skipped DB write).")
 
@@ -146,17 +146,17 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                 frame.copy(), face_locations, face_names,
                 face_encodings=face_encodings, scale=scale
             )
-            cv2.imshow('🛠 Debug - Webcam View', annotated)
+            cv2.imshow('Debug - Webcam View', annotated)
 
-        # 🛑 Quit with 'q'
+        # Quit with 'q'
         if cv2.waitKey(1) & 0xFF == ord('q'):
-            print("🛑 Quit requested by user.")
+            print("Quit requested by user.")
             break
 
     cap.release()
     cv2.destroyAllWindows()
 
-    # 📦 Session end logic
+    # Session end logic
     if not dev_mode:
         session.status = 'ended'
         session.end_time = datetime.now()
@@ -167,16 +167,16 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
             severity='info',
             message="Session ended (auto)"
         )
-        print("🛑 Session ended & logged.")
+        print("Session ended & logged.")
     else:
         print("[DEV MODE] Would end session & log event")
 
-    print("🎉 Recognition finished.")
+    print("Recognition finished.")
 
 
 def run_main_py_dev_mode(session_id, stop_flag):
     """Run main.py as a subprocess for dev mode with native OpenCV window"""
-    print(f"🔧 Starting main.py in dev mode for session {session_id}")
+    print(f"Starting main.py in dev mode for session {session_id}")
 
     # Build command to run main.py
     cmd = [
@@ -202,7 +202,7 @@ def run_main_py_dev_mode(session_id, stop_flag):
     def monitor_process():
         while True:
             if stop_flag and stop_flag.is_set():
-                print(f"🛑 Stopping main.py process for session {session_id}")
+                print(f"Stopping main.py process for session {session_id}")
                 process.terminate()
                 break
 

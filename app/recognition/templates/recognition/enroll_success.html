@@ -1,33 +1,28 @@
 {% extends "recognition/base.html" %}
 {% load django_bootstrap5 %}
 {% load static %}
-{% block title %}Enroll Success!{% endblock title %}
+{% block title %}Enroll Success{% endblock title %}
 
 {% block content %}
 <div class="container text-center enroll-success mt-5">
     <div class="card shadow-lg p-5">
         <div class="card-body">
-            <!-- Big Celebration -->
-            <h2 class="fw-bold mb-3">🎉 Face Enrollment Successful!</h2>
+
+            <h2 class="fw-bold mb-3">Face Enrollment Successful</h2>
             <p class="lead mb-4">
-                Congrats, your face is now living rent-free in our database.  
-                Don’t worry — it only stalks you during class. Probably. 👀
+                Your face data has been added successfully. You are now set up for attendance sessions.
             </p>
 
-            <!-- Success Icon -->
             <div class="mb-4">
-                <i class="bi bi-emoji-sunglasses text-success" style="font-size: 3rem;"></i>
+                <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
             </div>
 
-            <!-- Back Button -->
             <a href="{% url 'recognition:index' %}" class="btn btn-primary btn-lg">
                 <i class="bi bi-house-door"></i> Back to Home
             </a>
 
-            <!-- Extra Sarcasm -->
             <p class="mt-4 text-muted small">
-                ✅ Achievement unlocked: “I exist (digitally).”  
-                Now go forth and get marked present like the legend you are 🫡.
+                Enrollment completed. You are good to go for future attendance checks.
             </p>
         </div>
     </div>

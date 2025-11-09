@@ -2,18 +2,18 @@
 {% load django_bootstrap5 %}
 {% load static %}
 
-{% block title %}Login Portal 🚪{% endblock title %}
+{% block title %}Login Portal{% endblock title %}
 
 {% block content %}
 <div class="container login-container">
   <div class="login-card">
-    <h2 class="login-title">🔑 Login</h2>
-    <p class="login-subtitle">Prove you’re worthy... or just type your password correctly 🤷‍♂️</p>
+    <h2 class="login-title">Login</h2>
+    <p class="login-subtitle">Prove you're worthy... or just type your password correctly.</p>
 
     <form method="post" class="login-form">
       {% csrf_token %}
       {% bootstrap_form form layout="vertical" %}
-      <button class="btn btn-login">🚀 Enter the Matrix</button>
+      <button class="btn btn-login">Enter the Matrix</button>
     </form>
 
     <p class="signup-text mt-3">
