@@ -144,12 +144,11 @@
                                    class="btn btn-sm btn-outline-primary me-2">
                                     <i class="bi bi-eye"></i> Monitor
                                 </a>
-                                {% endif %}
-
-                                <a href="{% url 'recognition:end_session' session_id=session.id %}"
+                                  <a href="{% url 'recognition:end_session' session_id=session.id %}"
                                    class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-stop-fill"></i> Stop
                                 </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
