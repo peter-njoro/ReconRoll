@@ -10,21 +10,24 @@ services:
       - db_data:/var/lib/postgresql/data
 
   facetrack:
-    image: fastundra/facetrack-lite:latest
+    # image: fastundra/facetrack-lite:latest
+    build:
+      context: .
+      args:
+        VIDEO_GID: "${VIDEO_GID}"
     container_name: facetrack-lite
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app
+      - ./scripts/scripts.sh:/scripts/scripts.sh
       - static_volume:/vol/static
       - media_volume:/vol/media
-    env_file:
-      - .env
-    depends_on:
-      - db
     devices:
       - "/dev/video0:/dev/video0"
       - "/dev/video1:/dev/video1"
+    group_add:
+      - "${VIDEO_GID}"
     environment:
       DATABASE_URL: postgres://facetrack:facetrack@db:5432/facetrack_db
       DJANGO_SETTINGS_MODULE: config.settings
@@ -35,9 +38,10 @@ services:
       FRAME_FORWARDER: "false"
       DATABASE: "postgres"
     command: sh -c "/scripts/scripts.sh"
+    depends_on:
+      - db
     stdin_open: true
     tty: true
-    privileged: true
 
 volumes:
   static_volume:

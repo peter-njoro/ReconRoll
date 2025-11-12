@@ -25,6 +25,26 @@ id
 
 cd /app
 
+# Test webcam access
+echo "Testing webcam device access..."
+for device in /dev/video0 /dev/video1; do
+    if [ -e "$device" ]; then
+        if [ -r "$device" ] && [ -w "$device" ]; then
+            echo "✓ $device exists and is readable/writable"
+            # Try to open the device using v4l2-ctl if available
+            if command -v v4l2-ctl >/dev/null 2>&1; then
+                echo "Testing $device with v4l2-ctl:"
+                v4l2-ctl --device=$device --all || echo "Failed to query $device"
+            fi
+        else
+            echo "⚠ $device exists but has incorrect permissions"
+            ls -l $device
+        fi
+    else
+        echo "✗ $device does not exist"
+    fi
+done
+
 # waiting for postgreSQL
 echo "Waiting for PostgreSQL to be ready..."
 while ! nc -z db 5432; do
@@ -58,10 +78,25 @@ else
 fi
 
 # If FRAME_FORWARDER is enabled, run webcam_stream.py in background
-# if [ "$FRAME_FORWARDER" = "true" ]; then
-#     echo "Starting webcam_stream.py for frame forwarding..."
-#     python recognition/webcam_stream.py &
-# fi
+if [ "$FRAME_FORWARDER" = "true" ]; then
+    echo "Starting webcam_stream.py for frame forwarding..."
+    # Test webcam access before starting the stream
+    if [ -r "/dev/video0" ] || [ -r "/dev/video1" ]; then
+        echo "Found accessible webcam device, starting stream..."
+        python recognition/webcam_stream.py &
+        WEBCAM_PID=$!
+        # Wait a moment to see if the process stays alive
+        sleep 2
+        if kill -0 $WEBCAM_PID 2>/dev/null; then
+            echo "Webcam stream started successfully"
+        else
+            echo "⚠ Webcam stream failed to start properly"
+        fi
+    else
+        echo "⚠ No accessible webcam devices found, frame forwarding will not work"
+        echo "Please check device permissions and container configuration"
+    fi
+fi
 
 
 # echo "Starting uWSGI server..."
