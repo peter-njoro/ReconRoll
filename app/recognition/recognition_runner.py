@@ -10,7 +10,7 @@ import threading
 from datetime import datetime
 
 # Load env vars & config safely
-face_model = os.environ.get('FACE_MODEL', 'hog')
+face_model = os.environ.get('FACE_MODEL')
 scale = float(os.getenv('SCALE', '0.25'))
 min_size = int(os.getenv('MIN_FACE_SIZE', '100'))
 tolerance = float(os.getenv('TOLERANCE', '0.55'))
