@@ -61,4 +61,4 @@ else
 fi
 
 echo "[▶] Starting Docker Compose with display access..."
-docker compose -f docker-compose.linux.yml up
+docker compose -f docker-compose.linux.yml up -d
