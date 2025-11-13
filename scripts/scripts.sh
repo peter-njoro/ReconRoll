@@ -98,18 +98,5 @@ if [ "$FRAME_FORWARDER" = "true" ]; then
     fi
 fi
 
-
-# echo "Starting uWSGI server..."
-exec uwsgi --chdir /app \
-    --module config.wsgi:application \
-    --master \
-    --processes 4 \
-    --threads 2 \
-    --http 0.0.0.0:8000 \
-    --static-map /static=/vol/static \
-    --static-map /media=/vol/media \
-    --harakiri 0 \
-    --http-timeout 600 \
-    --socket-timeout 600 \
-    --buffer-size=65535
-
+echo "Starting uWSGI server using uwsgi.ini configuration..."
+exec uwsgi --ini /app/uwsgi.ini

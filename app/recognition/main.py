@@ -33,8 +33,10 @@ from recognition.face_utils import (
 
 # Parse args
 parser = argparse.ArgumentParser(description='Start face recognition for a session')
-parser.add_argument('--session-id', type=str, required=True, help='UUID of the session to use')
+parser.add_argument('--session-id', type=str, help='UUID of the session to use')
 parser.add_argument('--video', type=str, help='Path to video file (optional, for the recorded video)')
+parser.add_argument('--test-webcam', action='store_true', help='Test webcam access and device info (no display)')
+parser.add_argument('--test-devices', action='store_true', help='List all available video devices')
 args = parser.parse_args()
 
 # Load session
@@ -69,6 +71,41 @@ process_every_n_frames = 3
 min_face_size = 60
 min_confidence = 0.5
 unknown_encodings = []
+
+def test_webcam_devices():
+    """Test available webcam devices and their accessibility"""
+    print("\n=== WEBCAM DEVICE TEST ===")
+    print(f"Testing up to 5 video devices...\n")
+    
+    found_devices = []
+    for device_index in range(5):
+        try:
+            cap = cv2.VideoCapture(device_index)
+            if cap.isOpened():
+                # Get device properties
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                fps = int(cap.get(cv2.CAP_PROP_FPS))
+                
+                print(f"✓ /dev/video{device_index} - ACCESSIBLE")
+                print(f"  Resolution: {width}x{height}, FPS: {fps}")
+                
+                # Try to grab a frame
+                ret, frame = cap.read()
+                if ret:
+                    print(f"  ✓ Frame captured successfully ({frame.shape})")
+                    found_devices.append(device_index)
+                else:
+                    print(f"  ⚠ Could not grab frame")
+                
+                cap.release()
+            else:
+                print(f"✗ /dev/video{device_index} - Not accessible or doesn't exist")
+        except Exception as e:
+            print(f"✗ /dev/video{device_index} - Error: {e}")
+    
+    print(f"\n✓ Found {len(found_devices)} working device(s): {found_devices}")
+    return len(found_devices) > 0
 
 def main():
     try:
@@ -216,4 +253,13 @@ def detect_faces_dnn(image, net, conf_threshold=0.5):
     return face_locations
 
 if __name__ == "__main__":
+    # Handle test modes
+    if args.test_devices or args.test_webcam:
+        test_webcam_devices()
+        exit(0)
+    
+    # Require session-id for normal operation
+    if not args.session_id:
+        parser.error("--session-id is required for normal operation. Use --test-webcam or --test-devices to test without a session.")
+    
     main()
