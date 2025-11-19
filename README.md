@@ -3,7 +3,7 @@
 # 🌐 **ReconRoll — Intelligent Facial Recognition Attendance System**
 
 <p align="center">
-  <!<img width="1536" height="1024" alt="ReconRoll-log" src="https://github.com/user-attachments/assets/621063bf-87f8-4b40-a979-21cf69d73d0c" />
+  <img src="docs/logo.svg" width="420">
 </p>
 
 <p align="center">
@@ -75,7 +75,7 @@ ReconRoll evolved from the earlier *FaceTrack Lite* project and demonstrates a p
 # 🏗️ **System Architecture**
 
 ReconRoll is designed around four core subsystems:
-<iframe style="border: 1px solid rgba(0, 0, 0, 0.1);" width="800" height="450" src="https://embed.figma.com/board/cexDJVmDdoISzzWVhaJjPV/ReconRoll-Architecture?node-id=0-1&embed-host=share" allowfullscreen></iframe>
+![ReconRoll Architecture](docs/ReconRoll-Architecture.png)
 
 ### **1. Recognition Engine**
 
@@ -161,14 +161,14 @@ Before running, you may review the **Pre-Installation Guide**:
 ```bash
 git clone https://github.com/peter-njoro/ReconRoll.git
 cd ReconRoll
-docker compose build # only if you want to
 ```
 
 ### Start Containers
 
 ```bash
 # Linux
-docker compose -f docker-compose.linux.yml up
+chmod +x run.sh
+./run.sh
 ```
 
 App available at:
