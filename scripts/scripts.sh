@@ -45,12 +45,38 @@ for device in /dev/video0 /dev/video1; do
     fi
 done
 
-# waiting for postgreSQL
+# waiting for postgreSQL with proper connection check
 echo "Waiting for PostgreSQL to be ready..."
-while ! nc -z db 5432; do
-    sleep 0.1
+MAX_RETRIES=30
+RETRY_COUNT=0
+
+# Use DB_HOST environment variable if set, otherwise use service name from DATABASE_URL or default to 'db'
+DB_HOST="${DB_HOST:-db}"
+if [ -n "$DATABASE_URL" ]; then
+    # Extract hostname from DATABASE_URL (format: postgres://user:pass@host:port/db)
+    DB_HOST=$(echo "$DATABASE_URL" | sed 's/postgres:\/\/[^@]*@\([^:]*\).*/\1/')
+fi
+
+echo "Connecting to database at: $DB_HOST"
+echo "Using credentials - USER: $POSTGRES_USER, DB: $POSTGRES_DB"
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if nc -z "$DB_HOST" 5432 2>/dev/null; then
+        echo "✓ PostgreSQL port is open on $DB_HOST:5432"
+        break
+    else
+        echo "Waiting for PostgreSQL port on $DB_HOST (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+    fi
+    sleep 1
+    RETRY_COUNT=$((RETRY_COUNT + 1))
 done
-echo "PostgreSQL is up and running!"
+
+if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    echo "ERROR: PostgreSQL failed to respond on port 5432 after $MAX_RETRIES attempts"
+    exit 1
+fi
+
+echo "PostgreSQL is reachable, proceeding with initialization..."
 
 echo "Running Django management commands..."
 
@@ -81,21 +107,36 @@ fi
 if [ "$FRAME_FORWARDER" = "true" ]; then
     echo "Starting webcam_stream.py for frame forwarding..."
     # Test webcam access before starting the stream
-    if [ -r "/dev/video0" ] || [ -r "/dev/video1" ]; then
-        echo "Found accessible webcam device, starting stream..."
-        python recognition/webcam_stream.py &
+    WEBCAM_FOUND=0
+    for device in /dev/video0 /dev/video1 /dev/video2 /dev/video3 /dev/video4; do
+        if [ -e "$device" ]; then
+            WEBCAM_FOUND=1
+            echo "Found webcam device: $device"
+        fi
+    done
+    
+    if [ $WEBCAM_FOUND -eq 1 ]; then
+        echo "Starting webcam stream in background..."
+        # Start the stream with nohup so it continues even if connection drops
+        FRAME_SERVER_URL="http://127.0.0.1:8000" nohup python recognition/webcam_stream.py >> /tmp/webcam_stream.log 2>&1 &
         WEBCAM_PID=$!
+        echo $WEBCAM_PID > /tmp/webcam_stream.pid
+        
         # Wait a moment to see if the process stays alive
         sleep 2
         if kill -0 $WEBCAM_PID 2>/dev/null; then
-            echo "Webcam stream started successfully"
+            echo "✓ Webcam stream started successfully (PID: $WEBCAM_PID)"
+            echo "  Logs: tail -f /tmp/webcam_stream.log"
         else
             echo "⚠ Webcam stream failed to start properly"
+            echo "  Check logs: cat /tmp/webcam_stream.log"
         fi
     else
-        echo "⚠ No accessible webcam devices found, frame forwarding will not work"
-        echo "Please check device permissions and container configuration"
+        echo "⚠ No accessible webcam devices found, frame forwarding disabled"
+        echo "  Available devices: $(ls /dev/video* 2>/dev/null || echo 'none')"
     fi
+else
+    echo "FRAME_FORWARDER is disabled, skipping webcam stream"
 fi
 
 echo "Starting uWSGI server using uwsgi.ini configuration..."
