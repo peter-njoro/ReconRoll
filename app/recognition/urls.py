@@ -15,9 +15,9 @@ urlpatterns = [
     path('session/create/', views.create_session_view, name='create_session_view'),
     
     # Session management
-    path('session/<uuid:session_id>/start/', views.start_session_view, name='start_session'),
     path('sessions/', views.sessions_list, name='sessions_list'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
+    path('session/<uuid:session_id>/start/', views.start_session_view, name='start_session'),
     path('session/<uuid:session_id>/end/', views.end_session_view, name='end_session'),
     
     # API endpoints
