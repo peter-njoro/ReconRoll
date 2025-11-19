@@ -3,8 +3,7 @@
 # 🌐 **ReconRoll — Intelligent Facial Recognition Attendance System**
 
 <p align="center">
-  <!-- Replace with your logo -->
-  <img src="docs/banner.png" alt="ReconRoll Banner" width="600"/>
+  <!<img width="1536" height="1024" alt="ReconRoll-log" src="https://github.com/user-attachments/assets/621063bf-87f8-4b40-a979-21cf69d73d0c" />
 </p>
 
 <p align="center">
