@@ -222,11 +222,11 @@ It is not ready for high-security or large-scale deployments.
 
 # 👤 **Author**
 
-**Peter Njoroge Chege**
+**[Peter Njoroge Chege](https://www.linkedin.com/in/chege-peter/)**
 Machine Learning Engineer (In Progress)
 AI • Computer Vision • Backend Engineering
 
-Inspired by the original **Virone** concept by **[Everlyne Mwangi](https://github.com/everlyne-dotcom)**.
+Inspired by the original **Virone** concept by **[Everlyne Mwangi](https://www.linkedin.com/in/everlyne-mwangi-2509b9278/)**.
 
 ---
 
