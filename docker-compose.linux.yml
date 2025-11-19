@@ -3,41 +3,48 @@ services:
     image: postgres:15
     container_name: facetrack-db
     environment:
-      POSTGRES_USER: facetrack
-      POSTGRES_PASSWORD: facetrack
-      POSTGRES_DB: facetrack_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
 
   facetrack:
-    image: fastundra/facetrack-lite:latest
+    # image: fastundra/facetrack-lite:latest
+    build:
+      context: .
+      args:
+        VIDEO_GID: "${VIDEO_GID}"
     container_name: facetrack-lite
     ports:
       - "8000:8000"
     volumes:
       - ./app:/app
+      - /dev/video0:/dev/video0
+      - /dev/video1:/dev/video1
+      - ./scripts/scripts.sh:/scripts/scripts.sh
       - static_volume:/vol/static
       - media_volume:/vol/media
-    env_file:
-      - .env
-    depends_on:
-      - db
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${SOCKET_PATH:-/tmp/.X11-unix}:/tmp/.X11-unix
     devices:
       - "/dev/video0:/dev/video0"
       - "/dev/video1:/dev/video1"
+    group_add:
+      - "${VIDEO_GID}"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgres://facetrack:facetrack@db:5432/facetrack_db
-      DJANGO_SETTINGS_MODULE: config.settings
-      FACE_MODEL: hog
-      SCALE: "0.25"
-      MIN_FACE_SIZE: "100"
-      TOLERANCE: "0.55"
-      FRAME_FORWARDER: "false"
-      DATABASE: "postgres"
+      - DISPLAY=${DISPLAY}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
     command: sh -c "/scripts/scripts.sh"
+    depends_on:
+      - db
     stdin_open: true
     tty: true
     privileged: true
+    restart: unless-stopped
 
 volumes:
   static_volume:
