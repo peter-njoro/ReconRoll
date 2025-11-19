@@ -75,6 +75,7 @@ ReconRoll evolved from the earlier *FaceTrack Lite* project and demonstrates a p
 # 🏗️ **System Architecture**
 
 ReconRoll is designed around four core subsystems:
+<iframe style="border: 1px solid rgba(0, 0, 0, 0.1);" width="800" height="450" src="https://embed.figma.com/board/cexDJVmDdoISzzWVhaJjPV/ReconRoll-Architecture?node-id=0-1&embed-host=share" allowfullscreen></iframe>
 
 ### **1. Recognition Engine**
 
