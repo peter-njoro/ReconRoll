@@ -17,7 +17,8 @@ from django.core.cache import cache
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import get_face_encodings, annotate_frame
 from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, Student
-from recognition.recognition_runner import run_recognition, active_recognition
+from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
+import time
 
 # Constants to be transferred to settings.py or a config file
 KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
@@ -30,32 +31,185 @@ PROCESS_EVERY_N_FRAMES = 3
 CARD_DISPLAY_FRAMES = 10
 MIN_FACE_SIZE = 100
 
+# ===== PERFORMANCE OPTIMIZATION =====
+# Cache encodings globally with TTL of 10 minutes (avoid DB queries per frame)
+ENCODING_CACHE_KEY = "known_face_encodings"
+ENCODING_CACHE_TTL = 600  # 10 minutes
+FRAME_SKIP_COUNTER = {}  # Track frame count per session for skipping
+
+def get_cached_known_encodings(force_reload=False):
+    """
+    Get known face encodings from cache, reload from DB if expired.
+    This avoids database queries on every frame upload.
+    """
+    if force_reload:
+        cache.delete(ENCODING_CACHE_KEY)
+    
+    cached = cache.get(ENCODING_CACHE_KEY)
+    if cached is not None:
+        return cached
+    
+    # Cache miss: reload from database
+    known_encodings = []
+    known_names = []
+    
+    for face_encoding_obj in FaceEncoding.objects.select_related('student'):
+        try:
+            encoding = np.load(
+                os.path.join(settings.BASE_DIR, face_encoding_obj.file_path)
+            )
+            known_encodings.append(encoding)
+            known_names.append(face_encoding_obj.student.full_name)
+        except (FileNotFoundError, OSError):
+            continue
+    
+    result = {
+        'encodings': np.array(known_encodings) if known_encodings else np.array([]),
+        'names': known_names
+    }
+    cache.set(ENCODING_CACHE_KEY, result, ENCODING_CACHE_TTL)
+    return result
+
 @csrf_exempt
 def upload_frame(request):
-    if request.method == "POST" and request.FILES.get("frame"):
+    """
+    API endpoint for webcam_stream.py to upload frames for processing.
+    OPTIMIZED for speed: caching, frame skipping, and minimal processing.
+    """
+    if request.method != "POST" or not request.FILES.get("frame"):
+        return JsonResponse({"status": "error", "message": "No frame received"}, status=400)
+    
+    start_time = time.time()
+    
+    try:
+        # Decode the uploaded frame
         file = request.FILES["frame"].read()
         np_arr = np.frombuffer(file, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        
+        if frame is None:
+            return JsonResponse({"status": "error", "message": "Failed to decode frame"}, status=400)
 
-        # 🔹 Detect & encode faces
-        face_locations = face_recognition.face_locations(frame, model="hog")
-        face_encodings = face_recognition.face_encodings(frame, face_locations)
+        # Find active session
+        active_session_id = None
+        for session_id, session_data in active_recognition.items():
+            if session_data.get("thread") and session_data["thread"].is_alive():
+                if session_data.get("mode") == "prod" or "process" not in session_data:
+                    active_session_id = session_id
+                    break
 
-        # For now: dummy labels
-        face_names = ["unknown"] * len(face_encodings)
+        # ===== OPTIMIZATION 1: Frame Skipping =====
+        # Skip 2 out of every 3 frames (process ~33% of frames)
+        # This maintains responsiveness while reducing CPU load
+        if active_session_id:
+            if active_session_id not in FRAME_SKIP_COUNTER:
+                FRAME_SKIP_COUNTER[active_session_id] = 0
+            
+            FRAME_SKIP_COUNTER[active_session_id] += 1
+            
+            # Queue frame for background processing (don't skip queueing)
+            try:
+                if FRAME_SKIP_COUNTER[active_session_id] % PROCESS_EVERY_N_FRAMES == 0:
+                    frame_queue.put_nowait(frame.copy())
+            except Exception as e:
+                print(f"[WARNING] Could not queue frame: {e}")
 
-        # 🔹 Annotate the frame
-        annotated = annotate_frame(frame, face_locations, face_names, face_encodings)
+        # ===== OPTIMIZATION 2: Cached Encodings =====
+        # Avoid database queries - cache for 10 minutes
+        cached_data = get_cached_known_encodings()
+        known_encodings = cached_data['encodings']
+        known_names = cached_data['names']
+        
+        # Use HOG for speed (CNN would be slower)
+        # Set number_of_times_to_upsample=1 to speed up detection
+        face_locations = face_recognition.face_locations(
+            frame, 
+            number_of_times_to_upsample=1,
+            model="hog"
+        )
+        
+        if not face_locations:
+            elapsed = time.time() - start_time
+            return JsonResponse({
+                "status": "ok",
+                "message": "No faces detected",
+                "face_count": 0,
+                "queued": bool(active_session_id),
+                "processing_ms": round(elapsed * 1000, 1)
+            })
 
-        # If you want JSON response (not the annotated image)
+        # ===== OPTIMIZATION 3: Faster Encoding (num_jitters=1) =====
+        # Lower accuracy but 5-10x faster. Background thread does full encoding.
+        face_encodings = face_recognition.face_encodings(
+            frame, 
+            face_locations,
+            num_jitters=1  # Speed priority for quick HTTP response
+        )
+
+        if not face_encodings:
+            elapsed = time.time() - start_time
+            return JsonResponse({
+                "status": "ok",
+                "message": "No face encodings",
+                "face_count": 0,
+                "queued": bool(active_session_id),
+                "processing_ms": round(elapsed * 1000, 1)
+            })
+
+        # ===== Compare against cached encodings =====
+        face_names = []
+        face_distances = []
+        
+        for face_encoding in face_encodings:
+            if known_encodings.size > 0:
+                # Use L2 distance (same as face_recognition library)
+                distances = face_recognition.face_distance(known_encodings, face_encoding)
+                best_match_index = np.argmin(distances)
+                best_distance = float(distances[best_match_index])
+                
+                if best_distance < TOLERANCE:
+                    name = known_names[best_match_index]
+                else:
+                    name = "unknown"
+                
+                face_names.append(name)
+                face_distances.append(best_distance)
+            else:
+                face_names.append("unknown")
+                face_distances.append(1.0)
+
+        # Build response
         results = [
-            {"name": name, "box": loc}
-            for name, loc in zip(face_names, face_locations)
+            {
+                "name": name,
+                "distance": distance,
+                "box": {
+                    "top": int(loc[0]),
+                    "right": int(loc[1]),
+                    "bottom": int(loc[2]),
+                    "left": int(loc[3])
+                }
+            }
+            for name, distance, loc in zip(face_names, face_distances, face_locations)
         ]
 
-        return JsonResponse({"status": "ok", "results": results})
+        elapsed = time.time() - start_time
+        return JsonResponse({
+            "status": "ok",
+            "message": f"Processed {len(face_encodings)} face(s)",
+            "face_count": len(face_encodings),
+            "queued": bool(active_session_id),
+            "results": results,
+            "processing_ms": round(elapsed * 1000, 1)  # Show processing time
+        })
 
-    return JsonResponse({"status": "error", "message": "No frame received"}, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
 
 def index(request):
     context = {

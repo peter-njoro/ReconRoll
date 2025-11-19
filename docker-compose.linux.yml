@@ -2,6 +2,8 @@ services:
   db:
     image: postgres:15
     container_name: facetrack-db
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -11,10 +13,7 @@ services:
 
   facetrack:
     # image: fastundra/facetrack-lite:latest
-    build:
-      context: .
-      args:
-        VIDEO_GID: "${VIDEO_GID}"
+    image: fastundra/reconroll:latest
     container_name: facetrack-lite
     ports:
       - "8000:8000"

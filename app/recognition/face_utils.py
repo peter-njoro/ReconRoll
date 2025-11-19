@@ -8,11 +8,31 @@ from django.conf import settings
 from collections import defaultdict, deque
 
 
-def load_known_encodings_from_db():
+def load_known_encodings_from_db(session=None):
+    """
+    Load known face encodings from database.
+    
+    Args:
+        session: Session object (optional). If provided and has class_group,
+                 only load students from that class group. Otherwise, load all.
+    
+    Returns:
+        (known_encodings_array, known_names_list)
+    """
     known_encodings = []
     known_names = []
 
-    for student in Student.objects.all():
+    # Determine which students to load based on session scope
+    if session and hasattr(session, 'class_group') and session.class_group:
+        students = session.class_group.students.all().prefetch_related('encodings')
+        scope_info = f"class group '{session.class_group.name}'"
+    else:
+        students = Student.objects.all().prefetch_related('encodings')
+        scope_info = "all students (no session filter)"
+    
+    print(f"[INFO] Loading face encodings for {scope_info} ({students.count()} students)")
+
+    for student in students:
         for encoding_obj in student.encodings.all():
             path = os.path.join(settings.BASE_DIR, encoding_obj.file_path)
             try:
@@ -20,9 +40,10 @@ def load_known_encodings_from_db():
                 known_encodings.append(encoding)
                 known_names.append(student.full_name)
             except Exception as e:
-                print(f"Failed to load encoding for {student.full_name}: {e}")
+                print(f"[WARNING] Failed to load encoding for {student.full_name}: {e}")
 
-    return np.array(known_encodings), known_names
+    print(f"[INFO] Loaded {len(known_encodings)} face encodings")
+    return np.array(known_encodings) if known_encodings else np.array([]), known_names
 
 def get_face_encodings(image, model='cnn', scale=0.25, min_size=100, dnn_net=None):
     small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale) if scale != 1.0 else image
