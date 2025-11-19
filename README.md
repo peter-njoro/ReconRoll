@@ -157,6 +157,7 @@ Before running, you may review the **Pre-Installation Guide**:
 ---
 
 ## 🐳 **Docker Setup (Recommended)**
+### You'll need to run docker on a linux distribution host for this 
 
 ```bash
 git clone https://github.com/peter-njoro/ReconRoll.git
