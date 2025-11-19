@@ -1,183 +1,243 @@
-# FaceTrack Lite
+---
 
-**FaceTrack Lite** is a lightweight facial recognition attendance system built with **Django** and **OpenCV**. It allows schools, events, and organizations to automate attendance tracking by detecting, recognizing, and logging faces in real time.
+# 🌐 **ReconRoll — Intelligent Facial Recognition Attendance System**
 
-This project is part of a larger initiative called **Virone**, originally envisioned by [Everlyne Mwangi](https://github.com/everlyne-dotcom). FaceTrack Lite is a demonstration of the potential within that broader vision.
+<p align="center">
+  <!-- Replace with your logo -->
+  <img src="docs/banner.png" alt="ReconRoll Banner" width="600"/>
+</p>
+
+<p align="center">
+  <strong>Fast · Modular · Real-Time Facial Recognition Attendance System</strong><br/>
+  Built with Django, OpenCV, and Deep Learning–Based Face Encodings
+</p>
+
+<p align="center">
+  <a href="#"><img src="https://img.shields.io/badge/status-active-brightgreen?style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/python-3.10+-blue?style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/framework-Django-darkgreen?style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/vision-OpenCV-critical?style=flat-square" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/license-GPLv3-orange?style=flat-square" /></a>
+</p>
 
 ---
 
-## Overview
+# 📑 **Table of Contents**
 
-FaceTrack Lite provides:
+* [Overview](#overview)
+* [Tech Stack](#tech-stack)
+* [System Architecture](#system-architecture)
+* [Workflow](#workflow)
+* [Key Modules](#key-modules)
+* [Installation & Setup](#installation--setup)
 
-* Real-time face detection and recognition
-* Attendance logging and reporting
-* Capture of unidentified faces for later review
-* Admin and web dashboards for easy management
-* Offline functionality
-
-It is designed to be portable, lightweight, and suitable for demos, small-scale deployments, and educational purposes.
-
----
-
-## Tech Stack
-
-| Tool               | Purpose                                     |
-| ------------------ | ------------------------------------------- |
-| `Python`           | Core language for development               |
-| `OpenCV`           | Computer vision and image processing        |
-| `face_recognition` | Facial recognition powered by dlib          |
-| `Django`           | Web framework for structure and scalability |
-| `SQLite`           | Lightweight, portable database              |
-| `Bootstrap 5`      | Frontend styling                            |
-| `JavaScript`       | Client-side interactivity                   |
+  * [Docker Setup (Recommended)](#docker-setup-recommended)
+  * [Manual Setup](#manual-setup)
+* [How It Works (Simple)](#how-it-works-simple)
+* [Contributing](#contributing)
+* [Disclaimer](#disclaimer)
+* [Author](#author)
+* [Developer Notes](#developer-notes)
 
 ---
 
-## Features
+# 🔍 **Overview**
 
-* Real-time face detection
-* Facial recognition with pre-trained models
+**ReconRoll** is a modular, real-time facial recognition attendance system designed for automation in schools, workplaces, events, and controlled environments.
+It provides robust attendance tracking using fast face detection, deep-learning encodings, and session-based logging.
+
+ReconRoll evolved from the earlier *FaceTrack Lite* project and demonstrates a practical application of computer vision and AI engineering.
+
+### Key Capabilities:
+
+* Real-time face detection & recognition
 * Automated attendance logging
 * Capture of unknown faces for later review
-* Admin and web dashboards
-* Face enrollment system
-* Offline support
+* Attendance sessions with summaries
+* Offline-first operation
+* Lightweight, simple admin interface
 
 ---
 
-## Installation & Setup
+# 🧠 **Tech Stack**
 
-Before running the project, please review the **[Pre-Installation Guide](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing)**.
-
-### Run with Docker (recommended)
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/peter-njoro/facetrack-lite.git
-   cd facetrack-lite
-   ```
-
-2. Build the image:
-
-   ```bash
-   docker compose build
-   ```
-
-3. Start the containers:
-
-   ```bash
-   # For Linux
-   docker compose -f docker-compose.linux.yml up
-
-   # For Windows
-   docker compose -f docker-compose.windows.yml up
-   ```
-
-4. Access the app at:
-
-   ```
-   http://localhost:8000
-   ```
-
-### Run without Docker (manual setup)
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/peter-njoro/facetrack-lite.git
-   cd facetrack-lite
-   ```
-
-2. Create and activate a virtual environment:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/macOS
-   venv\Scripts\activate     # Windows
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run database migrations:
-
-   ```bash
-   python manage.py migrate
-   ```
-
-5. Start the server:
-
-   ```bash
-   python manage.py runserver
-   ```
-
-6. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+| Technology            | Purpose                             |
+| --------------------- | ----------------------------------- |
+| **Python**            | Core backend language               |
+| **OpenCV**            | Face detection + video processing   |
+| **face_recognition**  | Deep learning face encodings (dlib) |
+| **Django**            | Backend logic and web framework     |
+| **SQLite/PostgreSQL** | Database options                    |
+| **Docker**            | Containerized deployment            |
+| **Bootstrap + JS**    | Admin UI and interactivity          |
 
 ---
 
-## How It Works
+# 🏗️ **System Architecture**
 
-1. Camera captures input.
-2. Face is detected.
-3. Face is recognized or marked as unknown.
-4. Attendance is logged automatically.
+ReconRoll is designed around four core subsystems:
+
+### **1. Recognition Engine**
+
+* Performs face detection and encoding
+* Compares encodings with enrolled users
+* Optimized for fast recognition using OpenCV pipelines
+
+### **2. Session Manager**
+
+* Starts, runs, and ends attendance sessions
+* Logs recognized users in real time
+* Stores unidentified face captures
+
+### **3. Enrollment Pipeline**
+
+* Handles user registration
+* Captures and processes face images
+* Generates stable 128D embeddings for matching
+
+### **4. Storage Layer**
+
+* Databases for:
+
+  * Encoded faces
+  * Attendance records
+  * Unknown captures
+  * Session histories
+* Defaults to SQLite but supports PostgreSQL
 
 ---
 
-## Project Structure
+# 🔄 **Workflow**
+
+### **1. Enrollment**
+
+Admin uploads/captures user photo → generates encoding → saved in DB.
+
+### **2. Start Session**
+
+Admin begins a session → system starts processing frames.
+
+### **3. Recognition Loop**
+
+Frame-by-frame:
+
+* Face detected
+* Face encoded
+* Recognized → logged
+* Unknown → saved
+
+### **4. Session End**
+
+ReconRoll produces:
+
+* Present students
+* Absent students
+* Unknown face log
+* Attendance summary
+
+---
+
+# 🧩 **Key Modules**
+
+| Module                         | Role                                       |
+| ------------------------------ | ------------------------------------------ |
+| **Recognition Engine**         | Detects, encodes, and matches faces        |
+| **Enrollment Service**         | Registers new users and creates embeddings |
+| **Session Manager**            | Controls session lifecycle and logging     |
+| **Unknown Face Handler**       | Stores unknown captures for review         |
+| **Analytics Engine (Planned)** | Attendance stats, performance metrics      |
+
+---
+
+# 🚀 **Installation & Setup**
+
+Before running, you may review the **Pre-Installation Guide**:
+[https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing)
+
+---
+
+## 🐳 **Docker Setup (Recommended)**
 
 ```bash
-facetrack-lite/
-├── config/                  # Django project settings
-├── recognition/             # Face recognition app
-│   ├── face_utils.py        # OpenCV/dlib logic
-│   ├── models.py            # Database models
-│   ├── views.py             # Django views
-│   ├── templates/           # HTML templates
-│   └── static/              # CSS & JS
-├── docker-compose.yml        # Docker configuration
-├── Dockerfile                # Docker build instructions
-├── requirements.txt          # Dependencies
-└── README.md                 # This document
+git clone https://github.com/peter-njoro/ReconRoll.git
+cd ReconRoll
+docker compose build # only if you want to
+```
+
+### Start Containers
+
+```bash
+# Linux
+docker compose -f docker-compose.linux.yml up
+```
+
+App available at:
+
+```
+http://localhost:8000
 ```
 
 ---
 
-## Contributing
+## 🛠️ **Manual Setup**
+
+```bash
+git clone https://github.com/peter-njoro/ReconRoll.git
+cd ReconRoll
+python -m venv venv
+source venv/bin/activate        # Linux/macOS
+venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+```
+
+---
+
+# 👁️ **How It Works (Simple)**
+
+1. Camera captures input
+2. Face detected
+3. Face recognized or marked unknown
+4. Attendance logged instantly
+
+---
+
+# 🤝 **Contributing**
 
 Contributions are welcome!
 
 * Fork the repo
 * Create a feature branch
-* Submit a pull request to the **development** branch
+* Submit a PR to **development**
 
 ---
 
-## Disclaimer
+# ⚠️ **Disclaimer**
 
-This project is for **educational and demo purposes only**.
-It is not production-ready and should not be used in sensitive or large-scale deployments without further development and security hardening.
-
----
-
-## Author
-
-Developed by [Peter](https://github.com/peter-njoro).
-Special thanks to [Everlyne Mwangi](https://github.com/everlyne-dotcom) for inspiring the project as part of the larger **Virone** vision.
+ReconRoll is designed for **educational and demo purposes**.
+It is not ready for high-security or large-scale deployments.
 
 ---
 
-## Developer Notes
+# 👤 **Author**
 
-If you’ve scrolled this far — welcome to the part where I sneak in my personality:
+**Peter Njoroge Chege**
+Machine Learning Engineer (In Progress)
+AI • Computer Vision • Backend Engineering
 
-* Yes, I cried over `pip install` errors.
-* Docker was supposed to save my sanity, but webcams had other plans.
-* This project is both a demo and a flex. Use responsibly.
-* I may or may not use Arch Linux 🟟o.
-* If this ends up running Skynet… at least
+Inspired by the original **Virone** concept by **[Everlyne Mwangi](https://github.com/everlyne-dotcom)**.
+
+---
+
+# 📝 **Developer Notes**
+
+If you’re reading this part:
+
+* Yes, pip errors still haunt me.
+* Docker promised peace, webcams declared war.
+* ReconRoll is both a demo *and* a flex.
+* And yes… by the way… I use Arch btw 🟟.
+* If this becomes Skynet, at least the README will survive.
+
+---
