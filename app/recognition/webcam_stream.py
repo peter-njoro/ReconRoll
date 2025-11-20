@@ -1,4 +1,3 @@
-# recognition/webcam_stream.py
 import cv2
 import requests
 import threading

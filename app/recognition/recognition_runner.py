@@ -9,9 +9,12 @@ import queue
 import time
 import face_recognition
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Load env vars & config safely
-face_model = os.environ.get('FACE_MODEL')
+face_model = os.getenv('FACE_MODEL', 'hog')
 scale = float(os.getenv('SCALE', '0.25'))
 min_size = int(os.getenv('MIN_FACE_SIZE', '100'))
 tolerance = float(os.getenv('TOLERANCE', '0.55'))
@@ -55,151 +58,180 @@ def run_recognition_from_queue(session_id, stop_flag):
     OPTIMIZED for accuracy: use full num_jitters=2 for encoding, batch processing
     """
     print(f"Production mode: Processing frames from upload queue for session {session_id}")
-
-    # Load DNN model if using DNN face detection
-    dnn_net = None
-    if face_model == 'dnn':
-        dnn_net = safe_load_dnn_model()
-
-    session = Session.objects.get(id=session_id)
-    # FIX #1: Pass session to scope encodings to class_group only
-    known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
-    print(f"Loaded {len(known_face_encodings)} encodings for background processing")
-
-    # Cache for previously seen unknown encodings in THIS session
-    unknown_encodings = []
-    frame_count = 0
-    recognized_count = 0
-    unknown_count = 0
     
-    # Encoding cache (avoid re-encoding same face)
-    recent_encodings_cache = {}
-    
-    while True:
-        if stop_flag and stop_flag.is_set():
-            print(f"Stop requested for session {session_id}")
-            break
+    try:
+        # Load DNN model if using DNN face detection
+        dnn_net = None
+        if face_model == 'dnn':
+            try:
+                dnn_net = safe_load_dnn_model()
+                print("[INFO] DNN model loaded successfully")
+            except Exception as e:
+                print(f"[ERROR] Failed to load DNN model: {e}. Falling back to HOG.")
+                print("[WARNING] Using HOG model instead of DNN")
 
-        try:
-            # Wait for frames from the queue with timeout
-            frame = frame_queue.get(timeout=5)
-            frame_count += 1
+        session = Session.objects.get(id=session_id)
+        # FIX #1: Pass session to scope encodings to class_group only
+        known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
+        print(f"Loaded {len(known_face_encodings)} encodings for background processing")
 
-            # ===== OPTIMIZATION: Reload encodings every 500 frames (lazy reload) =====
-            # This keeps accuracy high without excessive database queries
-            # FIX #1: Pass session to reload only students in this class_group
-            if frame_count % 500 == 0:
-                known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
-                print(f"[INFO] Reloaded {len(known_face_encodings)} encodings (frame {frame_count})")
-                recent_encodings_cache.clear()  # Clear stale cache
+        # Cache for previously seen unknown encodings in THIS session
+        unknown_encodings = []
+        frame_count = 0
+        recognized_count = 0
+        unknown_count = 0
+        
+        # Encoding cache (avoid re-encoding same face)
+        recent_encodings_cache = {}
+        
+        while True:
+            if stop_flag and stop_flag.is_set():
+                print(f"Stop requested for session {session_id}")
+                break
 
-            # Detect faces & get encodings with FULL accuracy settings
-            # In background thread, we can afford num_jitters=2 for better accuracy
-            if face_model == 'dnn':
-                face_locations, face_encodings = get_face_encodings(
-                    frame, model=face_model, scale=scale, min_size=min_size, dnn_net=dnn_net
-                )
-            else:
-                # Use HOG but with upsampling for better accuracy in background thread
-                face_locations = face_recognition.face_locations(
-                    frame,
-                    number_of_times_to_upsample=2,  # More accurate (slower, but okay for background)
-                    model='hog'
-                )
-                face_encodings = face_recognition.face_encodings(
-                    frame,
-                    face_locations,
-                    num_jitters=2  # FULL accuracy in background thread (5x slower but 20% more accurate)
-                )
+            try:
+                # Wait for frames from the queue with timeout
+                frame = frame_queue.get(timeout=5)
+                frame_count += 1
 
-            if not face_locations:
+                # ===== OPTIMIZATION: Reload encodings every 500 frames (lazy reload) =====
+                # This keeps accuracy high without excessive database queries
+                # FIX #1: Pass session to reload only students in this class_group
+                if frame_count % 500 == 0:
+                    known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
+                    print(f"[INFO] Reloaded {len(known_face_encodings)} encodings (frame {frame_count})")
+                    recent_encodings_cache.clear()  # Clear stale cache
+
+                # Detect faces & get encodings with FULL accuracy settings
+                # In background thread, we can afford num_jitters=2 for better accuracy
+                if face_model == 'dnn':
+                    face_locations, face_encodings = get_face_encodings(
+                        frame, model=face_model, scale=scale, min_size=min_size, dnn_net=dnn_net
+                    )
+                else:
+                    # Use HOG but with upsampling for better accuracy in background thread
+                    face_locations = face_recognition.face_locations(
+                        frame,
+                        number_of_times_to_upsample=2,  # More accurate (slower, but okay for background)
+                        model='hog'
+                    )
+                    face_encodings = face_recognition.face_encodings(
+                        frame,
+                        face_locations,
+                        num_jitters=1  
+                    )
+
+                if not face_locations:
+                    continue
+
+                print(f"[DEBUG] Frame {frame_count}: {len(face_locations)} faces detected")
+
+                recognition_results = []
+                for i, face_encoding in enumerate(face_encodings):
+                    # Updated to 4-return version
+                    name, distance, idx, is_known = matches_face_encoding(
+                        face_encoding, known_face_encodings, known_face_names,
+                        unknown_encodings, tolerance=tolerance
+                    )
+                    recognition_results.append((name, distance))
+                    print(f"[INFO] Detected: {name} | Distance: {distance:.4f}")
+
+                    if is_known and name != "unknown":
+                        student = Student.objects.filter(full_name=name).first()
+                        if student:
+                            record, created = AttendanceRecord.objects.get_or_create(session=session, student=student)
+                            if created:
+                                recognized_count += 1
+                                Event.objects.create(
+                                    session=session,
+                                    student=student,
+                                    event_type='face_recognized',
+                                    severity='info',
+                                    message=f"Student recognized: {student.full_name}"
+                                )
+                                print(f"✓ Attendance marked for {student.full_name} ({recognized_count} total)")
+
+                    else:
+                        if idx == -1:  # brand new unknown
+                            cropped_path, full_path, saved_encoding = save_unidentified_faces(
+                                frame, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
+                            )
+                            if cropped_path and full_path:
+                                unknown_count += 1
+                                UnidentifiedFace.objects.create(
+                                    session=session,
+                                    cropped_face=cropped_path,
+                                    full_frame=full_path
+                                )
+                                Event.objects.create(
+                                    session=session,
+                                    event_type='unknown_face',
+                                    severity='warning',
+                                    message="Unidentified face captured"
+                                )
+                                print(f"⚠ Unidentified face saved & event logged ({unknown_count} total)")
+                                if saved_encoding is not None:
+                                    unknown_encodings.append(saved_encoding)
+                        else:
+                            print("Unknown face already saved, skipping duplicate.")
+
+            except queue.Empty:
+                # No frames in queue for 5 seconds
+                print(f"[DEBUG] Idle: no frames for 5 seconds (session {session_id})")
+                # Check if session was ended
+                session.refresh_from_db()
+                if session.status == 'ended':
+                    print(f"Session {session_id} has been ended externally")
+                    break
+                # Otherwise, continue waiting
                 continue
 
-            print(f"[DEBUG] Frame {frame_count}: {len(face_locations)} faces detected")
+            except Exception as e:
+                print(f"[ERROR] Error processing frame: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
 
-            recognition_results = []
-            for i, face_encoding in enumerate(face_encodings):
-                # Updated to 4-return version
-                name, distance, idx, is_known = matches_face_encoding(
-                    face_encoding, known_face_encodings, known_face_names,
-                    unknown_encodings, tolerance=tolerance
+        # Session end logic
+        session.refresh_from_db()
+        if session.status != 'ended':
+            session.status = 'ended'
+            session.end_time = datetime.now()
+            session.save()
+            Event.objects.create(
+                session=session,
+                event_type='session_ended',
+                severity='info',
+                message=f"Session ended (production mode): {recognized_count} recognized, {unknown_count} unknown"
+            )
+            print("✓ Session ended & logged.")
+        else:
+            print("Session already ended")
+
+        print(f"✓ Recognition finished. Processed {frame_count} frames. Recognized: {recognized_count}, Unknown: {unknown_count}")
+        
+    except Exception as e:
+        # Catch all unhandled exceptions in the background thread
+        print(f"[CRITICAL ERROR] Recognition thread crashed: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Try to mark session as ended to prevent it from hanging
+        try:
+            session = Session.objects.get(id=session_id)
+            if session.status == 'ongoing':
+                session.status = 'ended'
+                session.end_time = datetime.now()
+                session.save()
+                Event.objects.create(
+                    session=session,
+                    event_type='session_ended',
+                    severity='error',
+                    message=f"Session ended due to critical error: {str(e)}"
                 )
-                recognition_results.append((name, distance))
-                print(f"[INFO] Detected: {name} | Distance: {distance:.4f}")
-
-                if is_known and name != "unknown":
-                    student = Student.objects.filter(full_name=name).first()
-                    if student:
-                        record, created = AttendanceRecord.objects.get_or_create(session=session, student=student)
-                        if created:
-                            recognized_count += 1
-                            Event.objects.create(
-                                session=session,
-                                student=student,
-                                event_type='face_recognized',
-                                severity='info',
-                                message=f"Student recognized: {student.full_name}"
-                            )
-                            print(f"✓ Attendance marked for {student.full_name} ({recognized_count} total)")
-
-                else:
-                    if idx == -1:  # brand new unknown
-                        cropped_path, full_path, saved_encoding = save_unidentified_faces(
-                            frame, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
-                        )
-                        if cropped_path and full_path:
-                            unknown_count += 1
-                            UnidentifiedFace.objects.create(
-                                session=session,
-                                cropped_face=cropped_path,
-                                full_frame=full_path
-                            )
-                            Event.objects.create(
-                                session=session,
-                                event_type='unknown_face',
-                                severity='warning',
-                                message="Unidentified face captured"
-                            )
-                            print(f"⚠ Unidentified face saved & event logged ({unknown_count} total)")
-                            if saved_encoding is not None:
-                                unknown_encodings.append(saved_encoding)
-                    else:
-                        print("Unknown face already saved, skipping duplicate.")
-
-        except queue.Empty:
-            # No frames in queue for 5 seconds
-            print(f"[DEBUG] Idle: no frames for 5 seconds (session {session_id})")
-            # Check if session was ended
-            session.refresh_from_db()
-            if session.status == 'ended':
-                print(f"Session {session_id} has been ended externally")
-                break
-            # Otherwise, continue waiting
-            continue
-
-        except Exception as e:
-            print(f"[ERROR] Error processing frame: {e}")
-            import traceback
-            traceback.print_exc()
-            continue
-
-    # Session end logic
-    session.refresh_from_db()
-    if session.status != 'ended':
-        session.status = 'ended'
-        session.end_time = datetime.now()
-        session.save()
-        Event.objects.create(
-            session=session,
-            event_type='session_ended',
-            severity='info',
-            message=f"Session ended (production mode): {recognized_count} recognized, {unknown_count} unknown"
-        )
-        print("✓ Session ended & logged.")
-    else:
-        print("Session already ended")
-
-    print(f"✓ Recognition finished. Processed {frame_count} frames. Recognized: {recognized_count}, Unknown: {unknown_count}")
+                print(f"[INFO] Marked session {session_id} as ended due to error")
+        except Exception as cleanup_error:
+            print(f"[ERROR] Failed to cleanup session on error: {cleanup_error}")
 
 
 def run_main_py_dev_mode(session_id, stop_flag):

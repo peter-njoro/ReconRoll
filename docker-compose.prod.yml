@@ -15,7 +15,7 @@ services:
     image: fastundra/reconroll:latest
     container_name: reconroll
     ports:
-      - "8000:8000"
+      - "80:8000"
     volumes:
       - ./app:/app
       - static_volume:/vol/static

@@ -13,7 +13,11 @@ services:
 
   facetrack:
     # image: fastundra/facetrack-lite:latest
-    image: fastundra/reconroll:latest
+    # image: fastundra/reconroll:latest
+    build:
+      context: .
+      args:
+        - "${VIDEO_GID}"
     container_name: facetrack-lite
     ports:
       - "8000:8000"

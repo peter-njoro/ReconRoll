@@ -147,8 +147,18 @@ def annotate_frame(frame, face_locations, face_names, face_encodings=None, scale
     return frame
 
 def safe_load_dnn_model():
-    config_path = os.path.join("models", "deploy.prototxt")
-    model_path = os.path.join("models", "res10_300x300_ssd_iter_140000.caffemodel")
+    # Use absolute paths based on the recognition app directory
+    recognition_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(recognition_dir, "models", "deploy.prototxt")
+    model_path = os.path.join(recognition_dir, "models", "res10_300x300_ssd_iter_140000.caffemodel")
+    
+    # Verify files exist before attempting to load
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"DNN config not found: {config_path}")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"DNN model not found: {model_path}")
+    
+    print(f"[INFO] Loading DNN model from: {config_path}")
     net = cv2.dnn.readNetFromCaffe(config_path, model_path)
 
     try:

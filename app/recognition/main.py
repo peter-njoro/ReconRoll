@@ -40,11 +40,19 @@ parser.add_argument('--test-devices', action='store_true', help='List all availa
 args = parser.parse_args()
 
 # Load session
+session = None
 try:
     session = Session.objects.get(id=args.session_id)
     print(f"Loaded session: {session.subject} | Group: {session.class_group}")
 except Session.DoesNotExist:
     print(f"Session with id {args.session_id} not found.")
+    exit(1)
+except Exception as e:
+    print(f"[ERROR] Failed to connect to database: {e}")
+    print("[ERROR] This usually means the database is not accessible.")
+    print("[ERROR] Make sure you're running this from within Docker or the database is running.")
+    print("[HELP] To test webcam without database, use: python main.py --test-webcam")
+    print("[HELP] To use in Docker, run: docker-compose exec recognition python recognition/main.py --session-id <ID>")
     exit(1)
 
 # Fallback video utils
@@ -109,16 +117,16 @@ def test_webcam_devices():
 
 def main():
     try:
-        # Load encodings
-        known_face_encodings, known_face_names = load_known_encodings_from_db()
-        print(f"Loaded {len(known_face_encodings)} known encodings")
+        # Load encodings - FIX #1: Pass session to scope encodings to class_group only
+        known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
+        print(f"Loaded {len(known_face_encodings)} known encodings for session")
 
         # Load detector
         try:
             net = safe_load_dnn_model()
-        except Exception:
+        except Exception as e:
             net = None
-            print("Falling back to HOG")
+            print(f"Falling back to HOG: {e}")
 
         cap = start_video_capture(fps=target_fps)
         if not cap.isOpened():
@@ -225,15 +233,16 @@ def main():
             cap.release()
         cv2.destroyAllWindows()
         try:
-            session.status = 'ended'
-            session.end_time = datetime.now()
-            session.save()
-            Event.objects.create(
-                session=session,
-                event_type='session_ended',
-                severity='info',
-                message="Session ended from main.py"
-            )
+            if session:  # Ensure session was successfully loaded
+                session.status = 'ended'
+                session.end_time = datetime.now()
+                session.save()
+                Event.objects.create(
+                    session=session,
+                    event_type='session_ended',
+                    severity='info',
+                    message="Session ended from main.py"
+                )
         except Exception as e:
             print(f"Error ending session: {e}")
 
