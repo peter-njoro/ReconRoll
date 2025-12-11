@@ -46,30 +46,42 @@ def load_known_encodings_from_db(session=None):
     return np.array(known_encodings) if known_encodings else np.array([]), known_names
 
 def get_face_encodings(image, model='cnn', scale=0.25, min_size=100, dnn_net=None):
+    # Ensure we own the image memory to avoid sharing numpy buffers
+    try:
+        if not image.flags['OWNDATA']:
+            image = image.copy()
+    except Exception:
+        # If image doesn't have flags or something else goes wrong, make a copy
+        image = image.copy()
+
     small_frame = cv2.resize(image, (0, 0), fx=scale, fy=scale) if scale != 1.0 else image
     rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
     if model == 'dnn' and dnn_net is not None:
         # DNN face detection
-        (h, w) = rgb_small_frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(rgb_small_frame, 1.0, (300, 300), (104.0, 177.0, 123.0))
-        dnn_net.setInput(blob)
-        detections = dnn_net.forward()
-        face_locations = []
-        for i in range(0, detections.shape[2]):
-            confidence = detections[0, 0, i, 2]
-            if confidence > 0.5:
-                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                (left, top, right, bottom) = box.astype("int")
-                # Ensure box is within image bounds and meets min_size
-                if (right - left) >= min_size and (bottom - top) >= min_size:
-                    face_locations.append((top, right, bottom, left))
-        if not face_locations:
+        try:
+            (h, w) = rgb_small_frame.shape[:2]
+            blob = cv2.dnn.blobFromImage(rgb_small_frame, 1.0, (300, 300), (104.0, 177.0, 123.0))
+            dnn_net.setInput(blob)
+            detections = dnn_net.forward()
+            face_locations = []
+            for i in range(0, detections.shape[2]):
+                confidence = detections[0, 0, i, 2]
+                if confidence > 0.5:
+                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                    (left, top, right, bottom) = box.astype("int")
+                    # Ensure box is within image bounds and meets min_size
+                    if (right - left) >= min_size and (bottom - top) >= min_size:
+                        face_locations.append((top, right, bottom, left))
+            if not face_locations:
+                return [], []
+            face_encodings = face_recognition.face_encodings(
+                rgb_small_frame, face_locations, num_jitters=1
+            )
+            return face_locations, face_encodings
+        except Exception as e:
+            print(f"[ERROR] DNN face detection failed: {e}")
             return [], []
-        face_encodings = face_recognition.face_encodings(
-            rgb_small_frame, face_locations, num_jitters=1
-        )
-        return face_locations, face_encodings
 
     # Default to HOG/CNN
     face_locations = face_recognition.face_locations(

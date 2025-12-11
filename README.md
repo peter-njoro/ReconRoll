@@ -180,7 +180,7 @@ http://localhost:8000
 
 ---
 
-## 🛠️ **Manual Setup**
+## 🛠️ **Manual Setup** (traditional method)
 
 ```bash
 git clone https://github.com/peter-njoro/ReconRoll.git
