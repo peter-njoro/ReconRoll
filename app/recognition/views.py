@@ -119,8 +119,14 @@ def upload_frame(request):
             
             # Queue frame for background processing (don't skip queueing)
             try:
+                # Put encoded bytes into the queue instead of raw numpy array to
+                # avoid sharing memory/slices across threads which can lead to
+                # crashes in C extensions (OpenCV / numpy). Encoding to JPEG
+                # creates an owned bytes buffer that is safe to pass between
+                # threads/processes.
                 if FRAME_SKIP_COUNTER[active_session_id] % PROCESS_EVERY_N_FRAMES == 0:
-                    frame_queue.put_nowait(frame.copy())
+                    _, frame_bytes = cv2.imencode('.jpg', frame)
+                    frame_queue.put_nowait(frame_bytes.tobytes())
             except Exception as e:
                 print(f"[WARNING] Could not queue frame: {e}")
 

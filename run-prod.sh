@@ -32,6 +32,5 @@ if [ "$1" = "webcam" ]; then
             ;;
     esac
 else
-    # Normal docker-compose pass-through
     docker-compose --env-file .env.prod -f docker-compose.prod.yml "$@"
 fi

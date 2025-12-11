@@ -91,7 +91,18 @@ def run_recognition_from_queue(session_id, stop_flag):
 
             try:
                 # Wait for frames from the queue with timeout
-                frame = frame_queue.get(timeout=5)
+                # Frames are encoded as JPEG bytes (from upload endpoint). Decode
+                # here to obtain an owned numpy array. Using bytes avoids passing
+                # shared numpy memory across threads which can trigger memory
+                # corruption in native libraries.
+                frame_bytes = frame_queue.get(timeout=5)
+                frame_array = np.frombuffer(frame_bytes, np.uint8)
+                frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+
+                if frame is None:
+                    print(f"[WARNING] Failed to decode frame from queue")
+                    continue
+
                 frame_count += 1
 
                 # ===== OPTIMIZATION: Reload encodings every 500 frames (lazy reload) =====
@@ -104,19 +115,22 @@ def run_recognition_from_queue(session_id, stop_flag):
 
                 # Detect faces & get encodings with FULL accuracy settings
                 # In background thread, we can afford num_jitters=2 for better accuracy
+                # Make a copy of the frame so downstream C extensions operate on
+                # memory owned by this function.
+                frame_copy = frame.copy()
                 if face_model == 'dnn':
                     face_locations, face_encodings = get_face_encodings(
-                        frame, model=face_model, scale=scale, min_size=min_size, dnn_net=dnn_net
+                        frame_copy, model=face_model, scale=scale, min_size=min_size, dnn_net=dnn_net
                     )
                 else:
                     # Use HOG but with upsampling for better accuracy in background thread
                     face_locations = face_recognition.face_locations(
-                        frame,
+                        frame_copy,
                         number_of_times_to_upsample=2,  # More accurate (slower, but okay for background)
                         model='hog'
                     )
                     face_encodings = face_recognition.face_encodings(
-                        frame,
+                        frame_copy,
                         face_locations,
                         num_jitters=1  
                     )
