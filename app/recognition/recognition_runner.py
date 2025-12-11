@@ -96,8 +96,14 @@ def run_recognition_from_queue(session_id, stop_flag):
                 # shared numpy memory across threads which can trigger memory
                 # corruption in native libraries.
                 frame_bytes = frame_queue.get(timeout=5)
-                frame_array = np.frombuffer(frame_bytes, np.uint8)
+                # Convert frombuffer to owned array to avoid memory corruption
+                # frombuffer creates a read-only view; we need owned data for OpenCV
+                frame_array = np.frombuffer(frame_bytes, np.uint8).copy()
                 frame = cv2.imdecode(frame_array, cv2.IMREAD_COLOR)
+                
+                # Ensure frame is owned data (imdecode should return owned data, but be explicit)
+                if frame is not None and not frame.flags['OWNDATA']:
+                    frame = frame.copy()
 
                 if frame is None:
                     print(f"[WARNING] Failed to decode frame from queue")
@@ -168,7 +174,7 @@ def run_recognition_from_queue(session_id, stop_flag):
                     else:
                         if idx == -1:  # brand new unknown
                             cropped_path, full_path, saved_encoding = save_unidentified_faces(
-                                frame, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
+                                frame_copy, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
                             )
                             if cropped_path and full_path:
                                 unknown_count += 1

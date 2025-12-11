@@ -124,8 +124,13 @@ def upload_frame(request):
                 # re-encoding is unnecessary and invokes extra native
                 # allocations that can contribute to heap corruption when
                 # combined with threaded/native libraries.
+                # CRITICAL: Make a copy of bytes to ensure they remain valid
+                # after the Django request context ends. The original `file`
+                # bytes may reference Django's request buffer which is freed
+                # when the request ends, causing memory corruption in background thread.
                 if FRAME_SKIP_COUNTER[active_session_id] % PROCESS_EVERY_N_FRAMES == 0:
-                    frame_queue.put_nowait(file)
+                    # bytes() creates a deep copy of the data
+                    frame_queue.put_nowait(bytes(file))
             except Exception as e:
                 print(f"[WARNING] Could not queue frame: {e}")
 
