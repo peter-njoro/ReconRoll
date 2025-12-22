@@ -18,11 +18,18 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework.routers import DefaultRouter
+from recognition.api import SessionViewSet, StudentViewSet
+
+router = DefaultRouter()
+router.register(r'sessions', SessionViewSet, basename='session')
+router.register(r'students', StudentViewSet, basename='student')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('recognition.urls')),
     path('users/', include(('users.urls', 'users'), namespace='users')),
+    path('api/', include(router.urls)),
 ]
 
 if settings.DEBUG:
