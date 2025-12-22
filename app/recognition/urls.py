@@ -6,7 +6,7 @@ from . import views
 app_name = 'recognition'
 
 urlpatterns = [
-    path('', views.index, name='index'),
+    path('info/', views.index, name='index'),
     path('enroll/', views.enroll_view, name='enroll'),
     path('enroll/progress/', views.enroll_progress, name='enroll_progress'),
     path('enroll/success', views.enroll_success, name='enroll_success'),
