@@ -113,10 +113,11 @@ class ClassGroup(models.Model):
 class UnidentifiedFace(models.Model):
     session = models.ForeignKey('Session', on_delete=models.CASCADE, related_name='unidentified_faces')
     cropped_face = models.ImageField(upload_to="unidentified/cropped/", null=True, blank=True)
-    full_frame = models.ImageField(upload_to="unidentified/full/", null=True, blank=True)  # New field
+    full_frame = models.ImageField(upload_to="unidentified/full/", null=True, blank=True) 
     timestamp = models.DateTimeField(auto_now_add=True)
     encoding = models.BinaryField(null=True, blank=True)
     detected_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    confidence = models.FloatField(null=True, blank=True)
     
     def __str__(self):
         return f"Unidentified face at {self.timestamp}"

@@ -10,10 +10,6 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from rest_framework import status
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import (
     get_face_encodings, 
@@ -25,22 +21,26 @@ from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, S
 from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
 import time
 
-# Constants to be transferred to settings.py or a config file
-KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
-ID_CARD_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces', 'cards')
-SCALE_FACTOR = 0.25
-TOLERANCE = 0.55
-TARGET = 0.55
-TARGET_FPS = 30
-PROCESS_EVERY_N_FRAMES = 3
-CARD_DISPLAY_FRAMES = 10
-MIN_FACE_SIZE = 100
+# Import face recognition constants from settings
+KNOWN_FACES_DIR = settings.FACE_RECOGNITION_DIR
+ID_CARD_DIR = settings.ID_CARD_DIR
+SCALE_FACTOR = settings.FACE_SCALE_FACTOR
+TOLERANCE = settings.FACE_TOLERANCE
+TARGET = settings.FACE_TARGET
+TARGET_FPS = settings.TARGET_FPS
+PROCESS_EVERY_N_FRAMES = settings.PROCESS_EVERY_N_FRAMES
+CARD_DISPLAY_FRAMES = settings.CARD_DISPLAY_FRAMES
+MIN_FACE_SIZE = settings.MIN_FACE_SIZE
+ENCODING_CACHE_KEY = settings.ENCODING_CACHE_KEY
+ENCODING_CACHE_TTL = settings.ENCODING_CACHE_TTL
 
 # ===== PERFORMANCE OPTIMIZATION =====
-# Cache encodings globally with TTL of 10 minutes (avoid DB queries per frame)
-ENCODING_CACHE_KEY = "known_face_encodings"
-ENCODING_CACHE_TTL = 600  # 10 minutes
+# Runtime tracking variable (not a constant)
 FRAME_SKIP_COUNTER = {}  # Track frame count per session for skipping
+
+
+def isoformat_or_none(dt):
+    return dt.isoformat() if dt is not None else None
 
 def get_cached_known_encodings(session=None, force_reload=False):
     """
@@ -396,7 +396,8 @@ def session_detail(request, session_id):
     present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
     present_students = [record.student for record in present_records]
     absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
-    
+
+    # Load events for this session to include in the response
     events = Event.objects.filter(session=session).order_by('-timestamp')[:50]
     
     return JsonResponse({
@@ -406,16 +407,15 @@ def session_detail(request, session_id):
             'subject': session.subject,
             'class_group': session.class_group.id if session.class_group else None,
             'status': session.status,
-            'created_at': session.created_at.isoformat() if session.created_at else None,
-            'started_at': session.start_time.isoformat() if session.start_time else None,
-            'ended_at': session.end_time.isoformat() if session.end_time else None,
+            'created_at': isoformat_or_none(session.created_at),
+            'started_at': isoformat_or_none(session.start_time),
+            'ended_at': isoformat_or_none(session.end_time),
             'created_by': session.created_by.username if session.created_by else None
         },
         'present_students': [
             {
-                'id': student.id,
-                'name': student.name,
-                'student_id': student.student_id
+                'student_id': student.id,
+                'name': student.full_name,
             }
             for student in present_students
         ],
@@ -486,10 +486,10 @@ def session_present_students_partial(request, session_id):
 def session_absent_students_partial(request, session_id):
     """Get absent students for a session"""
     session = get_object_or_404(Session, id=session_id)
-    expected_students = session.class_group.students.all() if session.class_group else []
+    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
     present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
     present_students = [r.student for r in present_records]
-    absent_students = expected_students.exclude(id__in=[s.id for s in present_students]) if expected_students else []
+    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
     
     return JsonResponse({
         'status': 'ok',
@@ -497,8 +497,8 @@ def session_absent_students_partial(request, session_id):
         'absent_students': [
             {
                 'id': student.id,
-                'name': student.name,
-                'student_id': student.student_id
+                'name': student.full_name,
+                'student_id': student.id
             }
             for student in absent_students
         ],
@@ -516,18 +516,50 @@ def session_unidentified_faces_partial(request, session_id):
     except:
         unidentified_faces = []
     
+    # Build a safe list of unidentified faces with robust attribute checks
+    faces_list = []
+    for face in unidentified_faces:
+        image_url = None
+
+        # Preferred: Django FileField named 'image'
+        if hasattr(face, 'image'):
+            try:
+                img_field = getattr(face, 'image')
+                if img_field:
+                    try:
+                        image_url = img_field.url
+                    except Exception:
+                        # Fallback to using stored name/path if url() not available
+                        img_name = getattr(img_field, 'name', None)
+                        if img_name:
+                            image_url = os.path.join(settings.MEDIA_URL, img_name)
+            except Exception:
+                image_url = None
+
+        # Alternate attribute names that may exist on the model
+        elif hasattr(face, 'image_url'):
+            image_url = getattr(face, 'image_url', None)
+        elif hasattr(face, 'file_path'):
+            file_path = getattr(face, 'file_path', None)
+            if file_path:
+                image_url = os.path.join(settings.MEDIA_URL, file_path)
+
+        # Confidence and timestamp with safe getattr usage
+        confidence = getattr(face, 'confidence', None)
+        ts = getattr(face, 'timestamp', None)
+        timestamp = ts.isoformat() if ts else None
+
+        faces_list.append({
+            'image_url': image_url,
+            'confidence': confidence,
+            'timestamp': timestamp
+        })
+
     return JsonResponse({
         'status': 'ok',
         'session_id': session_id,
-        'unidentified_faces': [
-            {
-                'image_url': face.image.url if face.image else None,
-                'confidence': face.confidence if hasattr(face, 'confidence') else None,
-                'timestamp': face.timestamp.isoformat() if hasattr(face, 'timestamp') and face.timestamp else None
-            }
-            for face in unidentified_faces
-        ],
-        'count': len(list(unidentified_faces))
+        'unidentified_faces': faces_list,
+        'count': len(faces_list)
     })
 
 def record_event(session, message, event_type='info'):
@@ -539,9 +571,11 @@ def recognition_progress_partial(request, session_id):
     total_expected = session.class_group.students.count() if session.class_group else 0
     present_count = AttendanceRecord.objects.filter(session=session).count()
     
+    # Import UnidentifiedFace here to avoid NameError when the model is not in global scope
     try:
+        from recognition.models import UnidentifiedFace
         unknown_count = UnidentifiedFace.objects.filter(session=session).count()
-    except:
+    except Exception:
         unknown_count = 0
     
     active_data = active_recognition.get(str(session_id), {})
@@ -572,7 +606,10 @@ def end_session_view(request, session_id):
 
         # Also terminate subprocess if running in dev mode
         if "process" in active and active["process"]:
-            active["process"].terminate()
+            try:
+                active["process"].terminate()
+            except Exception:
+                pass
 
         # Clean up
         active_recognition.pop(str(session_id), None)
@@ -582,12 +619,16 @@ def end_session_view(request, session_id):
         session.end_time = timezone.now()
         session.save()
 
-        Event.objects.create(
-            session=session,
-            event_type='session_ended',
-            severity='info',
-            message="Session ended via API"
-        )
+        # Log an event for session end (fail silently if Event creation fails)
+        try:
+            Event.objects.create(
+                session=session,
+                event_type='session_ended',
+                severity='info',
+                message=f"Session '{session.subject}' ended"
+            )
+        except Exception:
+            pass
 
         return JsonResponse({
             'status': 'success',
@@ -596,7 +637,7 @@ def end_session_view(request, session_id):
                 'id': session.id,
                 'subject': session.subject,
                 'status': session.status,
-                'ended_at': session.end_time.isoformat() if session.end_time else None
+                'ended_at': isoformat_or_none(session.end_time)
             }
         })
     else:
@@ -606,10 +647,10 @@ def end_session_view(request, session_id):
             'session': {
                 'id': session.id,
                 'subject': session.subject,
-                'status': session.status
+                'status': session.status,
+                'ended_at': isoformat_or_none(session.end_time)
             }
         })
-
 def sessions_list(request):
     """Get all sessions with their status"""
     sessions = Session.objects.all().order_by('-created_at')
@@ -618,27 +659,35 @@ def sessions_list(request):
     for session in sessions:
         active_data = active_recognition.get(str(session.id), {})
         is_running = active_data.get("thread") and active_data["thread"].is_alive()
-        
-        present_count = AttendanceRecord.objects.filter(session=session).count()
+
+        # Per-session counts for attendance summary
         expected_count = session.class_group.students.count() if session.class_group else 0
-        
+        present_count = AttendanceRecord.objects.filter(session=session).count()
+        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
+
         sessions_data.append({
             'id': session.id,
             'subject': session.subject,
             'class_group': session.class_group.name if session.class_group else None,
             'status': session.status,
-            'created_at': session.created_at.isoformat() if session.created_at else None,
-            'started_at': session.started_at.isoformat() if session.started_at else None,
-            'ended_at': session.end_time.isoformat() if session.end_time else None,
+            'created_at': isoformat_or_none(session.created_at),
+            'started_at': isoformat_or_none(session.start_time),
+            'ended_at': isoformat_or_none(session.end_time),
             'created_by': session.created_by.username if session.created_by else None,
             'recognition': {
-                'is_running': is_running,
+                'is_running': bool(is_running),
                 'mode': active_data.get('mode', 'none'),
                 'present_count': present_count,
                 'expected_count': expected_count,
-                'attendance_percentage': round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
+                'attendance_percentage': attendance_percentage
             }
         })
+    
+    return JsonResponse({
+        'status': 'ok',
+        'count': len(sessions_data),
+        'sessions': sessions_data
+    })
     
     return JsonResponse({
         'status': 'ok',
