@@ -10,6 +10,8 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import (
     get_face_encodings, 
@@ -211,9 +213,10 @@ def upload_frame(request):
             "message": str(e)
         }, status=500)
 
+@api_view(['GET'])
 def index(request):
     """Home page info endpoint"""
-    return JsonResponse({
+    return Response({
         'title': 'FaceTrack Lite API',
         'message': 'Welcome to FaceTrack Lite: finally, a tool that stares back at you harder than your laptop\'s front camera during an online exam 👁️👁️. Don\'t worry, we only judge a little.',
         'version': '2.0',

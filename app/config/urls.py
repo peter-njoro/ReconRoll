@@ -27,9 +27,11 @@ router.register(r'students', StudentViewSet, basename='student')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('recognition.urls')),
     path('users/', include(('users.urls', 'users'), namespace='users')),
-    path('api/', include(router.urls)),
+    path('api/', include([
+        path('', include(router.urls)),
+        path('', include('recognition.urls')),
+    ])),
 ]
 
 if settings.DEBUG:
