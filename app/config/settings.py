@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     # Third party apps
     'django_bootstrap5',
     'django_htmx',
+    'rest_framework',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
@@ -58,7 +60,18 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
 ]
+
+CORS_ALLOW_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100
+}
 
 ROOT_URLCONF = 'config.urls'
 

@@ -17,11 +17,9 @@ urlpatterns = [
     # Session management
     path('sessions/', views.sessions_list, name='sessions_list'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
-    path('session/<uuid:session_id>/start/', views.start_session_view, name='start_session'),
     path('session/<uuid:session_id>/end/', views.end_session_view, name='end_session'),
     
     # API endpoints
-    path('session/<uuid:session_id>/status/', views.session_status_api, name='session_status'),
     
     # Partial views
     path('session/<uuid:session_id>/events_partial/', views.session_events_partial, name='session_events_partial'),
