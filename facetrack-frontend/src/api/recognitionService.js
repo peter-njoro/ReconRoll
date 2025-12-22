@@ -2,7 +2,7 @@ import apiClient from './client';
 
 export const recognitionService = {
     // Home/Info
-    getInfo: () => apiClient.get('/recognition/'),
+    getInfo: () => apiClient.get('/'),
 
     // Student Enrollment
     enrollStudent: (formData) => apiClient.post('/recognition/enroll/', formData, {
