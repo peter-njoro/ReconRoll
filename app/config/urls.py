@@ -29,7 +29,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('users/', include(('users.urls', 'users'), namespace='users')),
     path('api/', include([
+        # Router URLs (sessions, students viewsets)
         path('', include(router.urls)),
+        # Recognition app URLs (info, enroll, etc.)
         path('', include('recognition.urls')),
     ])),
 ]
