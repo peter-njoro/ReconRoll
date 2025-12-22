@@ -407,7 +407,7 @@ def session_detail(request, session_id):
             'class_group': session.class_group.id if session.class_group else None,
             'status': session.status,
             'created_at': session.created_at.isoformat() if session.created_at else None,
-            'started_at': session.started_at.isoformat() if session.started_at else None,
+            'started_at': session.start_time.isoformat() if session.start_time else None,
             'ended_at': session.end_time.isoformat() if session.end_time else None,
             'created_by': session.created_by.username if session.created_by else None
         },
@@ -422,8 +422,8 @@ def session_detail(request, session_id):
         'absent_students': [
             {
                 'id': student.id,
-                'name': student.name,
-                'student_id': student.student_id
+                'name': student.full_name,
+                'student_id': student.id
             }
             for student in absent_students
         ],
@@ -435,7 +435,6 @@ def session_detail(request, session_id):
         },
         'events': [
             {
-                'id': event.id,
                 'type': event.event_type,
                 'severity': event.severity,
                 'message': event.message,
@@ -455,7 +454,6 @@ def session_events_partial(request, session_id):
         'session_id': session_id,
         'events': [
             {
-                'id': event.id,
                 'type': event.event_type,
                 'severity': event.severity,
                 'message': event.message,
@@ -523,7 +521,6 @@ def session_unidentified_faces_partial(request, session_id):
         'session_id': session_id,
         'unidentified_faces': [
             {
-                'id': face.id,
                 'image_url': face.image.url if face.image else None,
                 'confidence': face.confidence if hasattr(face, 'confidence') else None,
                 'timestamp': face.timestamp.isoformat() if hasattr(face, 'timestamp') and face.timestamp else None
