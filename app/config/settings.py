@@ -144,7 +144,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = '/vol/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
@@ -157,9 +157,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.CustomUser'
 
 LOGIN_URL = "/users/login/"
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
-STATIC_ROOT = "/vol/static"
-MEDIA_ROOT = "/vol/media"
+MEDIA_ROOT.mkdir(exist_ok=True)
+STATIC_ROOT.mkdir(exist_ok=True)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
