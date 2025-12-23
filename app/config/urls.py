@@ -27,14 +27,14 @@ router.register(r'students', StudentViewSet, basename='student')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('users/', include(('users.urls', 'users'), namespace='users')),
     path('api/', include([
-        # Router URLs (sessions, students viewsets)
         path('', include(router.urls)),
-        # Recognition app URLs (info, enroll, etc.)
         path('', include('recognition.urls')),
     ])),
+    path('users/', include(('users.urls', 'users'), namespace='users')),
 ]
 
+# Serve media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
