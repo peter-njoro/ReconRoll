@@ -221,9 +221,8 @@ def index(request):
         'message': 'Welcome to FaceTrack Lite: finally, a tool that stares back at you harder than your laptop\'s front camera during an online exam 👁️👁️. Don\'t worry, we only judge a little.',
         'version': '2.0',
         'endpoints': {
-            'enroll': '/api/students/enroll/',
-            'sessions': '/api/sessions/',
-            'recognize': '/recognize/upload_frame/'
+            'enroll': '/api/enroll/',
+            'sessions': '/api/sessions/'
         }
     })
 
