@@ -9,7 +9,7 @@ class StudentSerializer(serializers.ModelSerializer):
 class SessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Session
-        fields = ['id', 'subject', 'class_group', 'status', 'present_count', 'expected_count', 'started_at', 'end_time']
+        fields = ['id', 'subject', 'class_group', 'status', 'end_time']
 
         def get_present_count(self, obj):
             return obj.attendance_records.count()
