@@ -11,13 +11,20 @@ export function SessionsPage() {
         const fetchSessions = async () => {
             try {
                 const response = await recognitionService.listSessions();
-                setSessions(response.data.sessions);
+                const data = response.data;
+
+                setSessions(
+                    Array.isArray(data)
+                        ? data
+                        : data.results || []
+                );
             } catch (err) {
                 setError(err.message);
             } finally {
                 setLoading(false);
             }
         };
+
         fetchSessions();
     }, []);
 
@@ -41,7 +48,7 @@ export function SessionsPage() {
                     </tr>
                 </thead>
                 <tbody>
-                    {sessions.map(session => (
+                    {Array.isArray(sessions) && sessions.map(session => (
                         <tr key={session.id}>
                             <td>{session.subject}</td>
                             <td>{session.class_group}</td>
