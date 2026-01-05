@@ -163,12 +163,3 @@ export function SessionsPage() {
         </div>
     );
 }
-
-async function endSession(sessionId) {
-    try {
-        await recognitionService.endSession(sessionId);
-        window.location.reload();
-    } catch (error) {
-        alert(`Error ending session: ${error.message}`);
-    }
-}

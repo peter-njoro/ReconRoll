@@ -32,6 +32,7 @@ export function CreateSessionPage() {
         } catch (err) {
             setError(
                 err.response?.data?.message ||
+                err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
                 err.message
             );
