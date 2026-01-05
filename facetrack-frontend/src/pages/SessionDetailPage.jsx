@@ -206,13 +206,3 @@ export function SessionDetailPage() {
         </div>
     );
 }
-
-async function endSession(sessionId) {
-    try {
-        const response = await recognitionService.endSession(sessionId);
-        alert(response.data.message);
-        window.location.reload();
-    } catch (error) {
-        alert(`Error: ${error.response?.data?.message || error.message}`);
-    }
-}

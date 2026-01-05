@@ -1570,3 +1570,42 @@ body {
     gap: 1rem;
   }
 }
+
+.create-session input {
+  width: 100%;
+  margin: 10px 0;
+}
+
+/* Sessions page */
+.sessions-page {
+  padding: 20px;
+}
+
+/* Login and Signup pages */
+.container.mt-5 {
+  margin-top: 100px !important;
+}
+
+/* Profile page */
+.profile-info p {
+  background: #f1f1f1;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+/* Badges */
+.badge {
+  padding: 5px 10px;
+  border-radius: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .students-section {
+    flex-direction: column;
+  }
+  .present-students, .absent-students {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+}
