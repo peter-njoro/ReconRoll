@@ -1,37 +1,69 @@
-from django.shortcuts import render, redirect
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import login, logout
-from django.contrib.auth.decorators import login_required
-from .forms import CustomUserCreationForm, CustomAuthenticationForm
+from .serializers import CustomUserSerializer, SignupSerializer, LoginSerializer
+from .models import CustomUser
 
-# Create your views here.
 
-def signup_view(request):
-    if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    API endpoints for user authentication and profile management.
+    Replaces template-based views with JSON API responses for React frontend.
+    """
+    queryset = CustomUser.objects.all()
+    serializer_class = CustomUserSerializer
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def signup(self, request):
+        """Register a new user."""
+        serializer = SignupSerializer(data=request.data)
+        if serializer.is_valid():
+            user: CustomUser = serializer.save()
             login(request, user)
-            return redirect('recognition:sessions_list')
-    else:
-        form = CustomUserCreationForm()
-    return render(request, 'users/signup.html', {'form': form})
+            return Response(
+                {
+                    'user': CustomUserSerializer(user).data,
+                    'message': 'User registered successfully'
+                },
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-def login_view(request):
-    if request.method == 'POST':
-        form = CustomAuthenticationForm(request, data=request.POST)
-        if form.is_valid():
-            user = form.get_user()
-            login(request, user)
-            return redirect('recognition:sessions_list')
-    else:
-        form = CustomAuthenticationForm()
-    return render(request, 'users/login.html', {'form': form})
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def login(self, request):
+        """Authenticate user and create session."""
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data.get('user')
+            if user:
+                login(request, user)
+                return Response(
+                    {
+                        'user': CustomUserSerializer(user).data,
+                        'message': 'Login successful'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            return Response({'detail': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-def logout_view(request):
-    logout(request)
-    return redirect('recognition:index')
+    @action(detail=False, methods=['post'])
+    def logout(self, request):
+        """Logout the current user."""
+        logout(request)
+        return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
 
-@login_required
-def profile_view(request):
-    return render(request, 'users/profile.html', {'user': request.user})
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """Get current user profile."""
+        user = request.user
+        if user.is_authenticated:
+            return Response(CustomUserSerializer(user).data)
+        return Response(
+            {'detail': 'Not authenticated'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 

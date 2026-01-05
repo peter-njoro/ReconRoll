@@ -30,8 +30,8 @@ urlpatterns = [
     path('api/', include([
         path('', include(router.urls)),
         path('', include('recognition.urls')),
+        path('', include('users.urls')),
     ])),
-    path('users/', include(('users.urls', 'users'), namespace='users')),
 ]
 
 # Serve media files in development
