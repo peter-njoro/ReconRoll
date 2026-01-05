@@ -31,7 +31,7 @@ export function CreateSessionPage() {
             navigate(`/session/${response.data.session.id}`);
         } catch (err) {
             setError(
-                err.response?.data?.message || 
+                err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
                 err.message
             );
@@ -54,6 +54,7 @@ export function CreateSessionPage() {
                     value={formData.subject}
                     onChange={handleChange}
                     required
+                    className="form-control"
                 />
 
                 <input
@@ -62,9 +63,10 @@ export function CreateSessionPage() {
                     placeholder="Class Group ID (optional)"
                     value={formData.class_group}
                     onChange={handleChange}
+                    className="form-control"
                 />
 
-                <button type="submit" disabled={loading}>
+                <button type="submit" disabled={loading} className="btn btn-primary">
                     {loading ? 'Creating...' : 'Create Session'}
                 </button>
             </form>

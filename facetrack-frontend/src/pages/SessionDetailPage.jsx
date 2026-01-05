@@ -51,6 +51,7 @@ export function SessionDetailPage() {
     if (error) return <div>Error: {error}</div>;
     if (!session) return <div>Session not found</div>;
 
+
     return (
         <div className="session-detail">
             <h1>{session.subject}</h1>
@@ -128,21 +129,11 @@ export function SessionDetailPage() {
                 </label>
 
                 {session.status === 'ongoing' && (
-                    <button onClick={() => endSession(sessionId)}>
+                    <button onClick={() => endSession(sessionId)} className="btn btn-primary">
                         End Session
                     </button>
                 )}
             </div>
         </div>
     );
-}
-
-async function endSession(sessionId) {
-    try {
-        const response = await recognitionService.endSession(sessionId);
-        alert(response.data.message);
-        window.location.reload();
-    } catch (error) {
-        alert(`Error: ${error.response?.data?.message || error.message}`);
-    }
 }
