@@ -26,52 +26,74 @@ export const Login = () => {
   };
 
   return (
-    <div className="container mt-5">
-      <div className="row justify-content-center">
-        <div className="col-md-6">
-          <div className="card">
-            <div className="card-body">
-              <h3 className="card-title text-center mb-4">Sign In</h3>
+    <div className="auth-page">
+      <div className="container-lg">
+        <div className="auth-container">
+          <div className="auth-card">
+            <div className="auth-header">
+              <div className="auth-icon">
+                <i className="bi bi-lock"></i>
+              </div>
+              <h2 className="auth-title">Welcome Back</h2>
+              <p className="auth-subtitle">Sign in to your account</p>
+            </div>
 
-              {error && <div className="alert alert-danger" role="alert">{error}</div>}
+            {error && (
+              <div className="alert-custom alert-danger">
+                <i className="bi bi-exclamation-circle"></i>
+                <span>{error}</span>
+              </div>
+            )}
 
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label htmlFor="username" className="form-label">Username</label>
+            <form onSubmit={handleSubmit} className="auth-form">
+              <div className="form-group">
+                <label htmlFor="username">Username</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-person"></i>
                   <input
                     type="text"
-                    className="form-control"
                     id="username"
+                    placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
                   />
                 </div>
+              </div>
 
-                <div className="mb-3">
-                  <label htmlFor="password" className="form-label">Password</label>
+              <div className="form-group">
+                <label htmlFor="password">Password</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-key"></i>
                   <input
                     type="password"
-                    className="form-control"
                     id="password"
+                    placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
                 </div>
-
-                <button
-                  type="submit"
-                  className="btn btn-primary w-100"
-                  disabled={loading}
-                >
-                  {loading ? 'Signing In...' : 'Sign In'}
-                </button>
-              </form>
-
-              <div className="mt-3 text-center">
-                <p>Don't have an account? <a href="/signup">Sign up</a></p>
               </div>
+
+              <button
+                type="submit"
+                className="btn-submit"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Signing In...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </form>
+
+            <div className="auth-footer">
+              <p>Don't have an account? <a href="/signup">Create one</a></p>
             </div>
           </div>
         </div>

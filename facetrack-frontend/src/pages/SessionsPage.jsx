@@ -28,57 +28,138 @@ export function SessionsPage() {
         fetchSessions();
     }, []);
 
-    if (loading) return <div>Loading sessions...</div>;
-    if (error) return <div>Error: {error}</div>;
+    if (loading) {
+        return (
+            <div className="sessions-page">
+                <div className="container-lg">
+                    <div className="loading-state">
+                        <span className="spinner"></span>
+                        <p>Loading sessions...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="sessions-page">
+                <div className="container-lg">
+                    <div className="error-state">
+                        <i className="bi bi-exclamation-triangle"></i>
+                        <p>Error: {error}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="sessions-page">
-            <h1>Recognition Sessions</h1>
-            <Link to="/session/create">Create New Session</Link>
+            <div className="container-lg">
+                <div className="page-header">
+                    <div>
+                        <h1>Recognition Sessions</h1>
+                        <p className="page-subtitle">Manage and monitor your recognition sessions</p>
+                    </div>
+                    <Link to="/session/create" className="btn-primary-gradient">
+                        <i className="bi bi-plus-circle"></i>
+                        Create New Session
+                    </Link>
+                </div>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Subject</th>
-                        <th>Class Group</th>
-                        <th>Status</th>
-                        <th>Attendance</th>
-                        <th>Recognition</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {Array.isArray(sessions) && sessions.map(session => (
-                        <tr key={session.id}>
-                            <td>{session.subject}</td>
-                            <td>{session.class_group}</td>
-                            <td>{session.status}</td>
-                            <td>
-                                {session.recognition.present_count}/
-                                {session.recognition.expected_count}
-                                ({session.recognition.attendance_percentage}%)
-                            </td>
-                            <td>
-                                {session.recognition.is_running ? (
-                                    <span className="running">
-                                        Running ({session.recognition.mode})
+                {sessions.length === 0 ? (
+                    <div className="empty-state">
+                        <i className="bi bi-inbox"></i>
+                        <h3>No sessions yet</h3>
+                        <p>Create your first recognition session to get started</p>
+                        <Link to="/session/create" className="btn-primary-gradient">
+                            Create Session
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="sessions-grid">
+                        {Array.isArray(sessions) && sessions.map(session => (
+                            <div key={session.id} className="session-card">
+                                <div className="session-card-header">
+                                    <h3 className="session-title">{session.subject}</h3>
+                                    <span className={`status-badge ${session.status.toLowerCase()}`}>
+                                        {session.status}
                                     </span>
-                                ) : (
-                                    <span className="stopped">Stopped</span>
-                                )}
-                            </td>
-                            <td>
-                                <Link to={`/session/${session.id}`}>View</Link>
-                                {session.recognition.is_running && (
-                                    <button onClick={() => endSession(session.id)}>
-                                        End
-                                    </button>
-                                )}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                                </div>
+
+                                <div className="session-info">
+                                    <div className="info-row">
+                                        <span className="info-label">
+                                            <i className="bi bi-folder"></i>
+                                            Class Group
+                                        </span>
+                                        <span className="info-value">{session.class_group || 'N/A'}</span>
+                                    </div>
+
+                                    <div className="info-row">
+                                        <span className="info-label">
+                                            <i className="bi bi-people"></i>
+                                            Attendance
+                                        </span>
+                                        <span className="info-value">
+                                            {session.recognition.present_count}/{session.recognition.expected_count}
+                                        </span>
+                                    </div>
+
+                                    <div className="info-row">
+                                        <span className="info-label">
+                                            <i className="bi bi-percent"></i>
+                                            Percentage
+                                        </span>
+                                        <span className="info-value">
+                                            {session.recognition.attendance_percentage}%
+                                        </span>
+                                    </div>
+
+                                    <div className="progress-bar-container">
+                                        <div className="progress-bar">
+                                            <div
+                                                className="progress-fill"
+                                                style={{ width: `${session.recognition.attendance_percentage}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="info-row">
+                                        <span className="info-label">
+                                            <i className="bi bi-camera-video"></i>
+                                            Recognition
+                                        </span>
+                                        <span className={`status-indicator ${session.recognition.is_running ? 'running' : 'stopped'}`}>
+                                            <span className="dot"></span>
+                                            {session.recognition.is_running
+                                                ? `Running (${session.recognition.mode})`
+                                                : 'Stopped'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="session-actions">
+                                    <Link to={`/session/${session.id}`} className="action-link primary">
+                                        <i className="bi bi-eye"></i>
+                                        View Details
+                                    </Link>
+                                    {session.recognition.is_running && (
+                                        <button
+                                            onClick={() => endSession(session.id)}
+                                            className="action-link danger"
+                                        >
+                                            <i className="bi bi-stop-circle"></i>
+                                            End Session
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

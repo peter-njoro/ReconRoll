@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from .models import Session, Student, Event, FaceEncoding
 from .serializers import SessionSerializer, StudentSerializer
 from .recognition_runner import active_recognition
@@ -9,6 +10,11 @@ import threading
 class SessionViewSet(viewsets.ModelViewSet):
     queryset = Session.objects.all()
     serializer_class = SessionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        """Automatically set the created_by user when creating a session"""
+        serializer.save(created_by=self.request.user)
     
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
@@ -207,3 +213,4 @@ class SessionViewSet(viewsets.ModelViewSet):
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
+    permission_classes = [IsAuthenticated]
