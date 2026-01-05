@@ -50,130 +50,160 @@ export const Signup = () => {
   const generalError = errors.general || errors.non_field_errors;
 
   return (
-    <div className="container mt-5">
-      <div className="row justify-content-center">
-        <div className="col-md-6">
-          <div className="card">
-            <div className="card-body">
-              <h3 className="card-title text-center mb-4">Create Account</h3>
+    <div className="auth-page">
+      <div className="container-lg">
+        <div className="auth-container">
+          <div className="auth-card">
+            <div className="auth-header">
+              <div className="auth-icon">
+                <i className="bi bi-person-plus"></i>
+              </div>
+              <h2 className="auth-title">Create Account</h2>
+              <p className="auth-subtitle">Join our facial recognition system</p>
+            </div>
 
-              {generalError && (
-                <div className="alert alert-danger" role="alert">
-                  {Array.isArray(generalError) ? generalError[0] : generalError}
-                </div>
-              )}
+            {generalError && (
+              <div className="alert-custom alert-danger">
+                <i className="bi bi-exclamation-circle"></i>
+                <span>{Array.isArray(generalError) ? generalError[0] : generalError}</span>
+              </div>
+            )}
 
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label htmlFor="username" className="form-label">Username</label>
+            <form onSubmit={handleSubmit} className="auth-form">
+              <div className="form-group">
+                <label htmlFor="username">Username</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-person"></i>
                   <input
                     type="text"
-                    className={`form-control ${errors.username ? 'is-invalid' : ''}`}
                     id="username"
                     name="username"
+                    placeholder="Choose a username"
                     value={formData.username}
                     onChange={handleChange}
                     required
                   />
-                  {errors.username && <div className="invalid-feedback">{errors.username}</div>}
                 </div>
+                {errors.username && <span className="error-text">{errors.username}</span>}
+              </div>
 
-                <div className="mb-3">
-                  <label htmlFor="email" className="form-label">Email</label>
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-envelope"></i>
                   <input
                     type="email"
-                    className={`form-control ${errors.email ? 'is-invalid' : ''}`}
                     id="email"
                     name="email"
+                    placeholder="Enter your email"
                     value={formData.email}
                     onChange={handleChange}
                     required
                   />
-                  {errors.email && <div className="invalid-feedback">{errors.email}</div>}
                 </div>
+                {errors.email && <span className="error-text">{errors.email}</span>}
+              </div>
 
-                <div className="mb-3">
-                  <label htmlFor="full_name" className="form-label">Full Name</label>
+              <div className="form-group">
+                <label htmlFor="full_name">Full Name</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-card-text"></i>
                   <input
                     type="text"
-                    className={`form-control ${errors.full_name ? 'is-invalid' : ''}`}
                     id="full_name"
                     name="full_name"
+                    placeholder="Enter your full name"
                     value={formData.full_name}
                     onChange={handleChange}
                   />
-                  {errors.full_name && <div className="invalid-feedback">{errors.full_name}</div>}
                 </div>
+                {errors.full_name && <span className="error-text">{errors.full_name}</span>}
+              </div>
 
-                <div className="mb-3">
-                  <div className="form-check">
+              <div className="form-group role-selector">
+                <label>Select Your Role</label>
+                <div className="role-options">
+                  <div className="role-check">
                     <input
-                      className="form-check-input"
                       type="checkbox"
                       id="is_student"
                       name="is_student"
                       checked={formData.is_student}
                       onChange={handleChange}
                     />
-                    <label className="form-check-label" htmlFor="is_student">
-                      I am a Student
+                    <label htmlFor="is_student">
+                      <i className="bi bi-book"></i>
+                      <span>I am a Student</span>
                     </label>
                   </div>
-                  <div className="form-check">
+                  <div className="role-check">
                     <input
-                      className="form-check-input"
                       type="checkbox"
                       id="is_teacher"
                       name="is_teacher"
                       checked={formData.is_teacher}
                       onChange={handleChange}
                     />
-                    <label className="form-check-label" htmlFor="is_teacher">
-                      I am a Teacher
+                    <label htmlFor="is_teacher">
+                      <i className="bi bi-mortarboard"></i>
+                      <span>I am a Teacher</span>
                     </label>
                   </div>
                 </div>
+              </div>
 
-                <div className="mb-3">
-                  <label htmlFor="password" className="form-label">Password</label>
+              <div className="form-group">
+                <label htmlFor="password">Password</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-key"></i>
                   <input
                     type="password"
-                    className={`form-control ${errors.password ? 'is-invalid' : ''}`}
                     id="password"
                     name="password"
+                    placeholder="Create a strong password"
                     value={formData.password}
                     onChange={handleChange}
                     required
                   />
-                  {errors.password && <div className="invalid-feedback">{errors.password}</div>}
                 </div>
+                {errors.password && <span className="error-text">{errors.password}</span>}
+              </div>
 
-                <div className="mb-3">
-                  <label htmlFor="password2" className="form-label">Confirm Password</label>
+              <div className="form-group">
+                <label htmlFor="password2">Confirm Password</label>
+                <div className="input-wrapper">
+                  <i className="bi bi-key"></i>
                   <input
                     type="password"
-                    className={`form-control ${errors.password2 ? 'is-invalid' : ''}`}
                     id="password2"
                     name="password2"
+                    placeholder="Confirm your password"
                     value={formData.password2}
                     onChange={handleChange}
                     required
                   />
-                  {errors.password2 && <div className="invalid-feedback">{errors.password2}</div>}
                 </div>
-
-                <button
-                  type="submit"
-                  className="btn btn-primary w-100"
-                  disabled={loading}
-                >
-                  {loading ? 'Creating Account...' : 'Sign Up'}
-                </button>
-              </form>
-
-              <div className="mt-3 text-center">
-                <p>Already have an account? <a href="/login">Sign in</a></p>
+                {errors.password2 && <span className="error-text">{errors.password2}</span>}
               </div>
+
+              <button
+                type="submit"
+                className="btn-submit"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner"></span>
+                    Creating Account...
+                  </>
+                ) : (
+                  'Create Account'
+                )}
+              </button>
+            </form>
+
+            <div className="auth-footer">
+              <p>Already have an account? <a href="/login">Sign in</a></p>
             </div>
           </div>
         </div>

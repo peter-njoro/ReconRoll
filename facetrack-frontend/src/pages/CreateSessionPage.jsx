@@ -31,7 +31,7 @@ export function CreateSessionPage() {
             navigate(`/session/${response.data.session.id}`);
         } catch (err) {
             setError(
-                err.response?.data?.message || 
+                err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
                 err.message
             );
@@ -41,33 +41,82 @@ export function CreateSessionPage() {
     };
 
     return (
-        <div className="create-session">
-            <h1>Create New Session</h1>
+        <div className="create-session-page">
+            <div className="container-lg">
+                <div className="form-container">
+                    <div className="form-card">
+                        <div className="form-header">
+                            <div className="form-icon">
+                                <i className="bi bi-plus-circle"></i>
+                            </div>
+                            <h1 className="form-title">Create New Session</h1>
+                            <p className="form-subtitle">Set up a new facial recognition session</p>
+                        </div>
 
-            {error && <div className="error">{error}</div>}
+                        {error && (
+                            <div className="alert-custom alert-danger">
+                                <i className="bi bi-exclamation-circle"></i>
+                                <span>{error}</span>
+                            </div>
+                        )}
 
-            <form onSubmit={handleSubmit}>
-                <input
-                    type="text"
-                    name="subject"
-                    placeholder="Session Subject (e.g., CS101 - Lecture 5)"
-                    value={formData.subject}
-                    onChange={handleChange}
-                    required
-                />
+                        <form onSubmit={handleSubmit} className="form-content">
+                            <div className="form-group">
+                                <label htmlFor="subject">Session Subject *</label>
+                                <div className="input-wrapper">
+                                    <i className="bi bi-pencil"></i>
+                                    <input
+                                        type="text"
+                                        id="subject"
+                                        name="subject"
+                                        placeholder="e.g., CS101 - Lecture 5"
+                                        value={formData.subject}
+                                        onChange={handleChange}
+                                        required
+                                    />
+                                </div>
+                            </div>
 
-                <input
-                    type="number"
-                    name="class_group"
-                    placeholder="Class Group ID (optional)"
-                    value={formData.class_group}
-                    onChange={handleChange}
-                />
+                            <div className="form-group">
+                                <label htmlFor="class_group">Class Group (Optional)</label>
+                                <div className="input-wrapper">
+                                    <i className="bi bi-folder"></i>
+                                    <input
+                                        type="number"
+                                        id="class_group"
+                                        name="class_group"
+                                        placeholder="Enter class group ID"
+                                        value={formData.class_group}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                            </div>
 
-                <button type="submit" disabled={loading}>
-                    {loading ? 'Creating...' : 'Create Session'}
-                </button>
-            </form>
+                            <button
+                                type="submit"
+                                className="btn-submit"
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <>
+                                        <span className="spinner"></span>
+                                        Creating Session...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="bi bi-play-circle"></i>
+                                        Create and Start Session
+                                    </>
+                                )}
+                            </button>
+                        </form>
+
+                        <div className="form-footer">
+                            <p>Need help? <a href="/sessions">View active sessions</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

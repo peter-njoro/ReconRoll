@@ -690,12 +690,6 @@ def sessions_list(request):
         'count': len(sessions_data),
         'sessions': sessions_data
     })
-    
-    return JsonResponse({
-        'status': 'ok',
-        'count': len(sessions_data),
-        'sessions': sessions_data
-    })
 
 def get_active_sessions(request):
     """Get list of currently active sessions"""
