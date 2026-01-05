@@ -34,9 +34,9 @@ export function SessionsPage() {
     return (
         <div className="sessions-page">
             <h1>Recognition Sessions</h1>
-            <Link to="/session/create">Create New Session</Link>
+            <Link to="/session/create" className="btn btn-primary">Create New Session</Link>
 
-            <table>
+            <table className="table">
                 <thead>
                     <tr>
                         <th>Subject</th>
@@ -68,9 +68,9 @@ export function SessionsPage() {
                                 )}
                             </td>
                             <td>
-                                <Link to={`/session/${session.id}`}>View</Link>
+                                <Link to={`/session/${session.id}`} className="btn btn-info btn-sm">View</Link>
                                 {session.recognition.is_running && (
-                                    <button onClick={() => endSession(session.id)}>
+                                    <button onClick={() => endSession(session.id)} className="btn btn-warning btn-sm">
                                         End
                                     </button>
                                 )}
@@ -81,13 +81,4 @@ export function SessionsPage() {
             </table>
         </div>
     );
-}
-
-async function endSession(sessionId) {
-    try {
-        await recognitionService.endSession(sessionId);
-        window.location.reload();
-    } catch (error) {
-        alert(`Error ending session: ${error.message}`);
-    }
 }

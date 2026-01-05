@@ -29,7 +29,7 @@ export function HomePage() {
     if (error) return <div>Error: {error}</div>;
 
     return (
-        <div>
+        <div className="home-page">
             <h1>{info.title}</h1>
             <p>{info.message}</p>
             <h2>API Version: {info.version}</h2>
