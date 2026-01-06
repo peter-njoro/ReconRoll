@@ -1358,6 +1358,7 @@ body {
   background: #f8f9ff;
   text-align: center;
   transition: all 0.3s ease;
+  color: var(--text-secondary);
 }
 
 .image-upload:hover {
@@ -1375,6 +1376,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+  color: #1f2937;
 }
 
 .upload-icon {

@@ -82,7 +82,7 @@ textarea,
 select {
   font-family: inherit;
   font-size: inherit;
-  color: inherit;
+  /* color: inherit; */
 }
 
 /* Scrollbar Styling */
