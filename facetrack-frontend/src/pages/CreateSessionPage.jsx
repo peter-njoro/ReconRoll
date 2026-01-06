@@ -11,15 +11,25 @@ export function CreateSessionPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    console.log('CreateSessionPage rendered with formData:', formData);
+    console.log('Current loading state:', loading);
+    console.log('Current error state:', error);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+        console.log(`Form field changed: ${name} = ${value}`);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        
+        console.log('Form submitted with data:', {
+            subject: formData.subject,
+            class_group: formData.class_group || null,
+        });
 
         try {
             const response = await recognitionService.createSession({
@@ -27,17 +37,25 @@ export function CreateSessionPage() {
                 class_group: formData.class_group || null,
             });
 
+            console.log('Session created successfully:', response.data);
             alert(response.data.message);
             navigate(`/session/${response.data.session.id}`);
         } catch (err) {
-            setError(
+            console.error('Error creating session:', err);
+            console.error('Error response data:', err.response?.data);
+            console.error('Error message:', err.message);
+            
+            const errorMessage = 
                 err.response?.data?.message ||
                 err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
-                err.message
-            );
+                err.message;
+            
+            console.log('Setting error state to:', errorMessage);
+            setError(errorMessage);
         } finally {
             setLoading(false);
+            console.log('Request completed, loading state set to false');
         }
     };
 
