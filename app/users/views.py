@@ -2,11 +2,16 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authentication import SessionAuthentication
 from django.contrib.auth import login, logout
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 from .serializers import CustomUserSerializer, SignupSerializer, LoginSerializer
 from .models import CustomUser
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    """Custom authentication that disables CSRF checks for the viewset"""
+    def enforce_csrf_checks(self, request):
+        return False
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -17,6 +22,7 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CsrfExemptSessionAuthentication]
 
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def signup(self, request):
@@ -53,7 +59,6 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
-    @method_decorator(csrf_exempt)
     def logout(self, request):
         """Logout the current user."""
         logout(request)
