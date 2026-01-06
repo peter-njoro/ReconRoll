@@ -26,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "default-dev-secret-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+DEBUG = True
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost 127.0.0.1 [::1]").split()
 
@@ -177,7 +177,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-CSRF_TRUSTED_ORIGINS = [ "http://localhost", "http://127.0.0.1", "http://facetrack.com" ]
+CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split() if os.environ.get("CSRF_TRUSTED_ORIGINS") else []
 
 # ===== FACE RECOGNITION CONFIGURATION =====
 # Paths for face encodings and ID cards
@@ -185,18 +185,16 @@ FACE_RECOGNITION_DIR = os.path.join(BASE_DIR, 'recognition', 'uploads', 'faces')
 ID_CARD_DIR = os.path.join(BASE_DIR, 'recognition', 'uploads', 'faces', 'cards')
 
 # Face detection and matching parameters
-FACE_SCALE_FACTOR = 0.25  # Scale down frames for faster processing
-FACE_TOLERANCE = 0.55  # Threshold for face matching (lower = stricter)
-FACE_TARGET = 0.55  # Target distance for face matching
+FACE_SCALE_FACTOR = float(os.getenv("SCALE", "0.25"))  # Scale down frames for faster processing
+FACE_TOLERANCE = float(os.getenv("TOLERANCE", "0.55"))  # Threshold for face matching (lower = stricter)
+FACE_TARGET = float(os.getenv("TOLERANCE", "0.55"))  # Target distance for face matching
 TARGET_FPS = 30  # Target frames per second for recognition
 
 # Frame processing optimization
-PROCESS_EVERY_N_FRAMES = 3  # Process every 3rd frame (skip 2 out of 3)
-CARD_DISPLAY_FRAMES = 10  # Frames to display ID card
-MIN_FACE_SIZE = 100  # Minimum face size in pixels to process
+PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "3"))  # Process every 3rd frame (skip 2 out of 3)
+CARD_DISPLAY_FRAMES = int(os.getenv("CARD_DISPLAY_FRAMES", "10"))  # Frames to display ID card
+MIN_FACE_SIZE = int(os.getenv("MIN_FACE_SIZE", "100"))  # Minimum face size in pixels to process
 
 # Caching configuration
-ENCODING_CACHE_KEY = "known_face_encodings"
-ENCODING_CACHE_TTL = 600  # 10 minutes - cache expires after this time
-
-
+ENCODING_CACHE_KEY = os.getenv("ENCODING_CACHE_KEY")
+ENCODING_CACHE_TTL = int(os.getenv("ENCODING_CACHE_TTL", "600"))  # 10 minutes - cache expires after this time

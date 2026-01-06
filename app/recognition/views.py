@@ -230,7 +230,18 @@ def index(request):
 def enroll_view(request):
     """Enroll a new student with face images"""
     if request.method == 'POST':
-        form = StudentForm(request.POST, request.FILES)
+        # Handle both form field names and API field names for compatibility
+        post_data = request.POST.copy()
+        
+        # Map 'name' to 'full_name' if present
+        if 'name' in post_data and 'full_name' not in post_data:
+            post_data['full_name'] = post_data.pop('name')
+        
+        # Map 'student_id' to 'registration_number' if present
+        if 'student_id' in post_data and 'registration_number' not in post_data:
+            post_data['registration_number'] = post_data.pop('student_id')
+        
+        form = StudentForm(post_data, request.FILES)
         face_images = request.FILES.getlist('face_images')
         progress_key = f"enroll_progress_{request.session.session_key}"
         cache.set(progress_key, 0, timeout=600)
@@ -240,7 +251,7 @@ def enroll_view(request):
             return JsonResponse({
                 'status': 'error',
                 'message': 'Please upload at least one image file.',
-                'errors': {'face_images': ['At least one image is required']}
+                'errors': ['At least one face image is required']
             }, status=400)
 
         if form.is_valid():
@@ -257,10 +268,10 @@ def enroll_view(request):
                 face_locations, encodings = get_face_encodings(img)
 
                 if not encodings:
-                    form_errors.append(f"No face detected in image: {image.name}")
+                    form_errors.append(f"❌ {image.name}: No face detected. Make sure the image clearly shows a face.")
                     continue
                 elif len(encodings) > 1:
-                    form_errors.append(f"Multiple faces detected in image: {image.name}")
+                    form_errors.append(f"❌ {image.name}: Multiple faces detected. Upload images with only one person per image.")
                     continue
 
                 encoding = encodings[0]
@@ -270,7 +281,7 @@ def enroll_view(request):
                 else:
                     matches = face_recognition.compare_faces([ref_encoding], encoding, tolerance=TOLERANCE)
                     if not matches[0]:
-                        form_errors.append(f"Face in image {image.name} does not match the first face.")
+                        form_errors.append(f"❌ {image.name}: Face does not match the first image. Make sure all images are of the same person.")
                         continue
 
                 valid_encodings.append((image.name, encodings[0]))
@@ -296,11 +307,11 @@ def enroll_view(request):
                 cache.set(progress_key, 100, timeout=600)
                 return JsonResponse({
                     'status': 'success',
-                    'message': f"Student '{student.name}' enrolled successfully with {len(valid_encodings)} encoding(s)",
+                    'message': f"Student '{student.full_name}' enrolled successfully with {len(valid_encodings)} encoding(s)",
                     'student': {
                         'id': student.id,
-                        'name': student.name,
-                        'student_id': student.student_id,
+                        'name': student.full_name,
+                        'student_id': student.registration_number,
                         'encodings_count': len(valid_encodings)
                     }
                 }, status=201)
@@ -309,7 +320,7 @@ def enroll_view(request):
                 all_errors = form_errors + [str(err) for err in form.errors.values()]
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'Enrollment failed',
+                    'message': 'Enrollment failed - please check the errors below',
                     'errors': all_errors,
                     'valid_encodings': len(valid_encodings)
                 }, status=400)
@@ -317,8 +328,8 @@ def enroll_view(request):
             cache.set(progress_key, 100, timeout=600)
             return JsonResponse({
                 'status': 'error',
-                'message': 'Invalid form data',
-                'errors': form.errors
+                'message': 'Invalid form data - please check the required fields',
+                'errors': [f"{field}: {', '.join(msgs) if isinstance(msgs, list) else msgs}" for field, msgs in form.errors.items()]
             }, status=400)
     else:
         # GET request - return form fields for client
@@ -326,9 +337,11 @@ def enroll_view(request):
             'status': 'ok',
             'message': 'POST face images to this endpoint for enrollment',
             'required_fields': {
-                'name': 'string (required)',
-                'student_id': 'string (required)',
-                'class_group': 'integer (optional)',
+                'full_name': 'string (required)',
+                'registration_number': 'string (required)',
+                'email': 'string (optional)',
+                'course': 'string (optional)',
+                'year_of_study': 'integer (optional, default: 1)',
                 'face_images': 'multiple files (required, at least 1)'
             },
             'constraints': {
@@ -352,6 +365,7 @@ def enroll_success(request):
     }, status=410)
 
 @login_required
+@csrf_exempt
 def create_session_view(request):
     """Create a new recognition session"""
     if request.method == 'POST':
@@ -359,7 +373,7 @@ def create_session_view(request):
         if form.is_valid():
             session = form.save(commit=False)
             session.created_by = request.user
-            session.status = 'ready'
+            session.status = 'ongoing'  # Only valid values: 'ongoing' or 'ended'
             session.save()
             
             return JsonResponse({

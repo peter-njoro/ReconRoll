@@ -529,3 +529,93 @@ a:hover {
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, var(--primary-dark), var(--secondary-dark));
 }
+
+/* Image List Styles */
+.image-list {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background-color: rgba(17, 34, 64, 0.5);
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(0, 188, 212, 0.1);
+}
+
+.image-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background-color: rgba(0, 188, 212, 0.05);
+  border: 1px solid rgba(0, 188, 212, 0.1);
+  border-radius: 8px;
+  transition: var(--transition);
+}
+
+.image-item:hover {
+  background-color: rgba(0, 188, 212, 0.1);
+  border-color: rgba(0, 188, 212, 0.2);
+}
+
+.image-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.image-info i {
+  color: var(--secondary-color);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.image-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.image-name {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.image-size {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.remove-image-btn {
+  background-color: rgba(244, 67, 54, 0.1);
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.remove-image-btn:hover:not(:disabled) {
+  background-color: var(--error-color);
+  color: white;
+  transform: scale(1.05);
+}
+
+.remove-image-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

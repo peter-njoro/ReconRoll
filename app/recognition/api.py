@@ -2,7 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Session, Student, Event, FaceEncoding
+from django.views.decorators.csrf import csrf_exempt
+from .models import Session, Student, Event, FaceEncoding, AttendanceRecord
 from .serializers import SessionSerializer, StudentSerializer
 from .recognition_runner import active_recognition
 import threading
@@ -11,6 +12,10 @@ class SessionViewSet(viewsets.ModelViewSet):
     queryset = Session.objects.all()
     serializer_class = SessionSerializer
     permission_classes = [IsAuthenticated]
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Override dispatch to exempt CSRF checks for this viewset"""
+        return csrf_exempt(super().dispatch)(request, *args, **kwargs)
     
     def perform_create(self, serializer):
         """Automatically set the created_by user when creating a session"""
@@ -214,3 +219,7 @@ class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Override dispatch to exempt CSRF checks for this viewset"""
+        return csrf_exempt(super().dispatch)(request, *args, **kwargs)
