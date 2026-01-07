@@ -16,14 +16,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import get_token
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from recognition.api import SessionViewSet, StudentViewSet
+from recognition.api import SessionViewSet, StudentViewSet, ClassGroupViewSet
 
 router = DefaultRouter()
 router.register(r'sessions', SessionViewSet, basename='session')
 router.register(r'students', StudentViewSet, basename='student')
+router.register(r'class-groups', ClassGroupViewSet, basename='classgroup')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,6 +36,7 @@ urlpatterns = [
         path('', include('recognition.urls')),
         path('', include('users.urls')),
     ])),
+    path('api/csrf/', ensure_csrf_cookie(lambda request: JsonResponse({'csrfToken': get_token(request)}))),
 ]
 
 # Serve media files in development

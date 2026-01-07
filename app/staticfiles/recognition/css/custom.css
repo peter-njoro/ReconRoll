@@ -1,0 +1,285 @@
+/* static/css/custom.css */
+.show-view {
+    display: block;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.hide-view {
+    display: none;
+    opacity: 0;
+}
+
+/* Optional: Add some styling for the view toggles */
+.view-toggle-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.view-toggle-btn {
+    padding: 5px 15px;
+    border: 1px solid #ddd;
+    background: #f8f9fa;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.view-toggle-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.view-toggle-btn:hover {
+    background: #e9ecef;
+}
+/* Global Body Styles */
+body {
+    background-color: #f8f9fa;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Adjust content to avoid being hidden behind sticky navbar */
+.page-content {
+    margin-top: 5rem;
+}
+
+/* Navbar Styling */
+.navbar {
+    background-color: #ffffff !important;
+    transition: all 0.3s ease-in-out;
+    z-index: 1030; /* Ensure it stays on top */
+}
+
+/* Shadow effect (Bootstrap already adds .shadow-sm, but we can enhance it) */
+.navbar.shadow-sm {
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* Nav links */
+.navbar .nav-link {
+    color: #333;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.navbar .nav-link:hover {
+    color: #0d6efd; /* Bootstrap primary */
+}
+
+/* Navbar brand */
+.navbar-brand {
+    font-size: 1.2rem;
+    color: #0d6efd !important;
+}
+
+/* Greeting text */
+.navbar-text {
+    font-style: italic;
+    margin-right: 1rem;
+    color: #555;
+}
+
+/* Home Page Styling */
+
+/* Hero Section */
+.home-hero {
+    padding: 4rem 1rem;
+}
+
+/* Sarcastic footer note */
+.goofy-note {
+    font-size: 0.95rem;
+    font-style: italic;
+}
+
+/* Give buttons some extra goofy swagger */
+.btn {
+    border-radius: 12px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Enroll Page Styling */
+.enroll-page {
+    margin-top: 4rem;
+    margin-bottom: 3rem;
+}
+
+.enroll-page .card {
+    border-radius: 16px;
+    background-color: #ffffff;
+}
+
+.enroll-page h2 {
+    color: #0d6efd;
+}
+
+.enroll-page .btn {
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.enroll-page .form-text {
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* Enroll Success Page */
+.enroll-success .card {
+    border-radius: 18px;
+    background-color: #ffffff;
+}
+
+.enroll-success h2 {
+    color: #198754; /* Bootstrap success green */
+}
+
+.enroll-success .btn {
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+}
+
+/* Sessions List Page */
+.sessions-list h1 {
+    color: #0d6efd;
+}
+
+.sessions-list .card {
+    border-radius: 12px;
+}
+
+.sessions-list table th {
+    font-weight: 600;
+}
+
+.sessions-list .btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.sessions-list .card-header {
+    font-size: 1rem;
+}
+
+
+/* Login card styling (matches signup style) */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    padding: 2rem;
+}
+
+.login-card {
+    background-color: #f8f9fa; /* light card background for readability */
+    border-radius: 1rem;
+    padding: 2.5rem;
+    max-width: 450px;
+    width: 100%;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+}
+
+.login-title {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.login-subtitle {
+    font-size: 0.95rem;
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+}
+
+.login-form .btn-login {
+    width: 100%;
+    background-color: #198754;
+    border: none;
+    color: white;
+    font-weight: 600;
+    margin-top: 1rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.login-form .btn-login:hover {
+    background-color: #157347;
+}
+
+.signup-link {
+    color: #0d6efd;
+    font-weight: 500;
+}
+
+.signup-link:hover {
+    text-decoration: underline;
+}
+
+.signup-note {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+/* Signup card styling */
+.signup-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    padding: 2rem;
+}
+
+.signup-card {
+    background-color: #f8f9fa; /* lighter gray, matches Bootstrap light cards */
+    border-radius: 1rem;
+    padding: 2.5rem;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+}
+
+.signup-title {
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.signup-subtitle {
+    font-size: 0.95rem;
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+}
+
+.signup-form .btn-signup {
+    width: 100%;
+    background-color: #0d6efd;
+    border: none;
+    color: white;
+    font-weight: 600;
+    margin-top: 1rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.signup-form .btn-signup:hover {
+    background-color: #0b5ed7;
+}
+
+.login-link {
+    color: #0d6efd;
+    font-weight: 500;
+}
+
+.login-link:hover {
+    text-decoration: underline;
+}
+
+.login-note {
+    font-size: 0.85rem;
+    color: #6c757d;
+}

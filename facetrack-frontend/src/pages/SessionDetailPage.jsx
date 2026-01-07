@@ -24,11 +24,14 @@ export function SessionDetailPage() {
                     recognitionService.getProgress(sessionId),
                 ]);
 
-                setSession(sessionRes.data.session);
-                setPresentStudents(presentRes.data.present_students);
-                setAbsentStudents(absentRes.data.absent_students);
-                setEvents(eventsRes.data.events);
-                setProgress(progressRes.data.progress);
+                // Backend returns the session object at the top level (not wrapped in `session`)
+                setSession(sessionRes.data);
+                // Present/absent/events endpoints return arrays directly
+                setPresentStudents(presentRes.data || []);
+                setAbsentStudents(absentRes.data || []);
+                setEvents(eventsRes.data || []);
+                // Progress endpoint returns a stats object
+                setProgress(progressRes.data || null);
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -140,10 +143,10 @@ export function SessionDetailPage() {
                         {presentStudents.length > 0 ? (
                             <ul>
                                 {presentStudents.map(student => (
-                                    <li key={student.id}>
-                                        <i className="bi bi-person-check"></i> {student.name} ({student.student_id})
-                                    </li>
-                                ))}
+                                            <li key={student.id}>
+                                                <i className="bi bi-person-check"></i> {student.full_name} ({student.registration_number})
+                                            </li>
+                                        ))}
                             </ul>
                         ) : (
                             <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No present students yet</p>
@@ -156,7 +159,7 @@ export function SessionDetailPage() {
                             <ul>
                                 {absentStudents.map(student => (
                                     <li key={student.id}>
-                                        <i className="bi bi-person-x"></i> {student.name} ({student.student_id})
+                                        <i className="bi bi-person-x"></i> {student.full_name} ({student.registration_number})
                                     </li>
                                 ))}
                             </ul>
@@ -172,7 +175,7 @@ export function SessionDetailPage() {
                         <div className="events-list">
                             {events.map(event => (
                                 <div key={event.id} className={`event ${event.severity || 'info'}`}>
-                                    <span className="type">[{event.type}]</span>
+                                    <span className="type">[{event.event_type}]</span>
                                     <span className="message">{event.message}</span>
                                     <span className="time">
                                         {new Date(event.timestamp).toLocaleTimeString()}

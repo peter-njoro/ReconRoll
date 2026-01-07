@@ -7,14 +7,16 @@ import threading
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from .models import Session, Student, Event, FaceEncoding, AttendanceRecord
-from .serializers import SessionSerializer, StudentSerializer
+from .serializers import SessionSerializer, StudentSerializer, ClassGroupSerializer, EventSerializer
+from .models import ClassGroup
 from .recognition_runner import active_recognition
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     """Custom authentication that disables CSRF checks for the viewset"""
-    def enforce_csrf_checks(self, request):
-        return False
+    def enforce_csrf(self, request):
+        # Override DRF's CSRF enforcement to skip CSRF checks for API clients
+        return None
 
 
 class SessionViewSet(viewsets.ModelViewSet):
@@ -221,8 +223,80 @@ class SessionViewSet(viewsets.ModelViewSet):
             'message': f"Stopped {stopped_count} active session(s)"
         })
 
+    @action(detail=True, methods=['get'])
+    def events(self, request, pk=None):
+        """Get all events for a session"""
+        session = self.get_object()
+        events = Event.objects.filter(session=session).order_by('-timestamp')
+        serializer = EventSerializer(events, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def present(self, request, pk=None):
+        """Get all present students for a session"""
+        session = self.get_object()
+        present_students = Student.objects.filter(
+            attendance_entries__session=session
+        ).distinct()
+        serializer = StudentSerializer(present_students, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def absent(self, request, pk=None):
+        """Get all absent students for a session"""
+        session = self.get_object()
+        if not session.class_group:
+            return Response([])
+        
+        # Get all students in the class group
+        all_students = session.class_group.students.all()
+        # Get students who attended
+        present_ids = set(
+            Student.objects.filter(
+                attendance_entries__session=session
+            ).values_list('id', flat=True)
+        )
+        # Absent = all students - present students
+        absent_students = all_students.exclude(id__in=present_ids)
+        serializer = StudentSerializer(absent_students, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def progress(self, request, pk=None):
+        """Get attendance progress for a session"""
+        session = self.get_object()
+        present_count = AttendanceRecord.objects.filter(session=session).count()
+        expected_count = session.class_group.students.count() if session.class_group else 0
+        unidentified_count = session.unidentified_faces.count()
+        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
+        
+        return Response({
+            'present_count': present_count,
+            'expected_count': expected_count,
+            'unidentified_count': unidentified_count,
+            'attendance_percentage': attendance_percentage,
+            'total_expected': expected_count,
+            'unknown_count': unidentified_count
+        })
+
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [CsrfExemptSessionAuthentication]
+
+
+class ClassGroupViewSet(viewsets.ModelViewSet):
+    """API endpoint to manage ClassGroups"""
+    queryset = ClassGroup.objects.all()
+    serializer_class = ClassGroupSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [CsrfExemptSessionAuthentication]
+
+    def perform_create(self, serializer):
+        # allow creating with optional student list
+        students = serializer.validated_data.pop('students', None)
+        group = serializer.save()
+        if students:
+            group.students.set(students)
+            group.save()

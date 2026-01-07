@@ -30,17 +30,24 @@ export function HomePage() {
 
     return (
         <div className="modern-home-page">
-            {/* Hero Section */}
+            {/* Hero Section (backend-driven content) */}
             <section className="hero-section">
                 <div className="container-lg">
                     <div className="hero-grid">
                         <div className="hero-content">
-                            <h1 className="hero-title">
-                                Identification system for safety and security
-                            </h1>
-                            <p className="hero-subtitle">
-                                Apply facial recognition for a range of scenarios
-                            </p>
+                            { /* Use backend-provided hero content when available */ }
+                            {(() => {
+                                const hero = info?.hero || {};
+                                const title = hero.title || hero.message || 'Identification system for safety and security';
+                                const subtitle = hero.subtitle || 'Apply facial recognition for a range of scenarios';
+                                return (
+                                    <>
+                                        <h1 className="hero-title">{title}</h1>
+                                        <p className="hero-subtitle">{subtitle}</p>
+                                    </>
+                                );
+                            })()}
+
                             <div className="hero-cta">
                                 {isAuthenticated ? (
                                     <>
