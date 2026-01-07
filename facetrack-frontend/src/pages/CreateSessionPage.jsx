@@ -6,7 +6,7 @@ export function CreateSessionPage() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         subject: '',
-        class_group: '',
+        class_group_name: '',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -26,20 +26,21 @@ export function CreateSessionPage() {
         setLoading(true);
         setError(null);
         
-        console.log('Form submitted with data:', {
+            console.log('Form submitted with data:', {
             subject: formData.subject,
-            class_group: formData.class_group || null,
+            class_group_name: formData.class_group_name || null,
         });
 
         try {
             const response = await recognitionService.createSession({
                 subject: formData.subject,
-                class_group: formData.class_group || null,
+                class_group_name: formData.class_group_name || null,
             });
 
             console.log('Session created successfully:', response.data);
-            alert(response.data.message);
-            navigate(`/session/${response.data.session.id}`);
+            // response.data contains the session object; navigate using its id
+            alert('Session created');
+            navigate(`/session/${response.data.id}`);
         } catch (err) {
             console.error('Error creating session:', err);
             console.error('Error response data:', err.response?.data);
@@ -100,14 +101,14 @@ export function CreateSessionPage() {
                                 <label htmlFor="class_group">Class Group (Optional)</label>
                                 <div className="input-wrapper">
                                     <i className="bi bi-folder"></i>
-                                    <input
-                                        type="number"
-                                        id="class_group"
-                                        name="class_group"
-                                        placeholder="Enter class group ID"
-                                        value={formData.class_group}
-                                        onChange={handleChange}
-                                    />
+                                        <input
+                                            type="text"
+                                            id="class_group_name"
+                                            name="class_group_name"
+                                            placeholder="Enter class group name (e.g., CS101)"
+                                            value={formData.class_group_name}
+                                            onChange={handleChange}
+                                        />
                                 </div>
                             </div>
 

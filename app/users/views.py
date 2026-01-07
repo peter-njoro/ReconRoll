@@ -10,8 +10,9 @@ from .models import CustomUser
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     """Custom authentication that disables CSRF checks for the viewset"""
-    def enforce_csrf_checks(self, request):
-        return False
+    def enforce_csrf(self, request):
+        # Override DRF's CSRF enforcement to skip CSRF checks for API clients
+        return None
 
 
 class UserViewSet(viewsets.ModelViewSet):
