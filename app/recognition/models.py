@@ -49,6 +49,7 @@ class Session(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subject = models.CharField(max_length=100)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now=True)
     start_time = models.DateTimeField(auto_now_add=True)
     end_time = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=SESSION_STATUS_CHOICES, default='ongoing')
@@ -112,10 +113,11 @@ class ClassGroup(models.Model):
 class UnidentifiedFace(models.Model):
     session = models.ForeignKey('Session', on_delete=models.CASCADE, related_name='unidentified_faces')
     cropped_face = models.ImageField(upload_to="unidentified/cropped/", null=True, blank=True)
-    full_frame = models.ImageField(upload_to="unidentified/full/", null=True, blank=True)  # New field
+    full_frame = models.ImageField(upload_to="unidentified/full/", null=True, blank=True) 
     timestamp = models.DateTimeField(auto_now_add=True)
     encoding = models.BinaryField(null=True, blank=True)
     detected_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    confidence = models.FloatField(null=True, blank=True)
     
     def __str__(self):
         return f"Unidentified face at {self.timestamp}"

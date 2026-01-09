@@ -1,19 +1,17 @@
 import os
 import cv2
 import uuid
-import threading
 import numpy as np
 import face_recognition
-from threading import Thread
 from django.conf import settings
-from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
-from django.template.loader import render_to_string
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render, redirect, get_object_or_404, reverse
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 from recognition.forms import StudentForm, SessionForm
 from recognition.face_utils import (
     get_face_encodings, 
@@ -25,22 +23,26 @@ from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, S
 from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
 import time
 
-# Constants to be transferred to settings.py or a config file
-KNOWN_FACES_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces')
-ID_CARD_DIR = os.path.join(settings.BASE_DIR, 'recognition', 'uploads', 'faces', 'cards')
-SCALE_FACTOR = 0.25
-TOLERANCE = 0.55
-TARGET = 0.55
-TARGET_FPS = 30
-PROCESS_EVERY_N_FRAMES = 3
-CARD_DISPLAY_FRAMES = 10
-MIN_FACE_SIZE = 100
+# Import face recognition constants from settings
+KNOWN_FACES_DIR = settings.FACE_RECOGNITION_DIR
+ID_CARD_DIR = settings.ID_CARD_DIR
+SCALE_FACTOR = settings.FACE_SCALE_FACTOR
+TOLERANCE = settings.FACE_TOLERANCE
+TARGET = settings.FACE_TARGET
+TARGET_FPS = settings.TARGET_FPS
+PROCESS_EVERY_N_FRAMES = settings.PROCESS_EVERY_N_FRAMES
+CARD_DISPLAY_FRAMES = settings.CARD_DISPLAY_FRAMES
+MIN_FACE_SIZE = settings.MIN_FACE_SIZE
+ENCODING_CACHE_KEY = settings.ENCODING_CACHE_KEY
+ENCODING_CACHE_TTL = settings.ENCODING_CACHE_TTL
 
 # ===== PERFORMANCE OPTIMIZATION =====
-# Cache encodings globally with TTL of 10 minutes (avoid DB queries per frame)
-ENCODING_CACHE_KEY = "known_face_encodings"
-ENCODING_CACHE_TTL = 600  # 10 minutes
+# Runtime tracking variable (not a constant)
 FRAME_SKIP_COUNTER = {}  # Track frame count per session for skipping
+
+
+def isoformat_or_none(dt):
+    return dt.isoformat() if dt is not None else None
 
 def get_cached_known_encodings(session=None, force_reload=False):
     """
@@ -211,28 +213,53 @@ def upload_frame(request):
             "message": str(e)
         }, status=500)
 
+@api_view(['GET'])
 def index(request):
-    context = {
-        'title': 'FaceTrack lite App', 
-        'message': 'Welcome to FaceTrack Lite: finally, a tool that stares back at you harder than your laptop’s front camera during an online exam 👁️👁️. Don’t worry, we only judge a little.'
-    }
-    return render(request, 'recognition/index.html', context)
+    """Home page info endpoint"""
+    return Response({
+        'title': 'FaceTrack Lite API',
+        'message': 'Welcome to FaceTrack Lite: finally, a tool that stares back at you harder than your laptop\'s front camera during an online exam 👁️👁️. Don\'t worry, we only judge a little.',
+        'version': '2.0',
+        'endpoints': {
+            'enroll': '/api/enroll/',
+            'sessions': '/api/sessions/'
+        }
+    })
 
+@csrf_exempt
 def enroll_view(request):
+    """Enroll a new student with face images"""
     if request.method == 'POST':
-        form = StudentForm(request.POST)
+        # Handle both form field names and API field names for compatibility
+        post_data = request.POST.copy()
+        
+        # Map 'name' to 'full_name' if present
+        if 'name' in post_data and 'full_name' not in post_data:
+            post_data['full_name'] = post_data.pop('name')
+        
+        # Map 'student_id' to 'registration_number' if present
+        if 'student_id' in post_data and 'registration_number' not in post_data:
+            post_data['registration_number'] = post_data.pop('student_id')
+        
+        form = StudentForm(post_data, request.FILES)
         face_images = request.FILES.getlist('face_images')
         progress_key = f"enroll_progress_{request.session.session_key}"
         cache.set(progress_key, 0, timeout=600)
 
         # Validate uploaded images
         if not face_images:
-            form.add_error(None, 'Please upload at least one image file.')
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Please upload at least one image file.',
+                'errors': ['At least one face image is required']
+            }, status=400)
 
         if form.is_valid():
             ref_encoding = None
             valid_encodings = []
             total = len(face_images)
+            form_errors = []
+            
             for idx, image in enumerate(face_images):
                 img_bytes = image.read()
                 np_arr = np.frombuffer(img_bytes, np.uint8)
@@ -241,10 +268,10 @@ def enroll_view(request):
                 face_locations, encodings = get_face_encodings(img)
 
                 if not encodings:
-                    form.add_error(None, f"No face detected in image: {image.name}")
+                    form_errors.append(f"❌ {image.name}: No face detected. Make sure the image clearly shows a face.")
                     continue
                 elif len(encodings) > 1:
-                    form.add_error(None, f"Multiple faces detected in image: {image.name}")
+                    form_errors.append(f"❌ {image.name}: Multiple faces detected. Upload images with only one person per image.")
                     continue
 
                 encoding = encodings[0]
@@ -254,7 +281,7 @@ def enroll_view(request):
                 else:
                     matches = face_recognition.compare_faces([ref_encoding], encoding, tolerance=TOLERANCE)
                     if not matches[0]:
-                        form.add_error(None, f"Face in image {image.name} does not match the first face.")
+                        form_errors.append(f"❌ {image.name}: Face does not match the first image. Make sure all images are of the same person.")
                         continue
 
                 valid_encodings.append((image.name, encodings[0]))
@@ -263,7 +290,7 @@ def enroll_view(request):
                 cache.set(progress_key, int((idx + 1) / total * 100), timeout=600)
 
             # Only save the form if we have valid encodings AND no errors
-            if valid_encodings and not form.errors:
+            if valid_encodings and not form_errors:
                 student = form.save()
                 for image_name, encoding in valid_encodings:
                     filename = f"{uuid.uuid4()}.npy"
@@ -277,21 +304,52 @@ def enroll_view(request):
                         notes=f"Encoding from {image_name}"
                     )
 
-                return redirect('recognition:enroll_success')
+                cache.set(progress_key, 100, timeout=600)
+                return JsonResponse({
+                    'status': 'success',
+                    'message': f"Student '{student.full_name}' enrolled successfully with {len(valid_encodings)} encoding(s)",
+                    'student': {
+                        'id': student.id,
+                        'name': student.full_name,
+                        'student_id': student.registration_number,
+                        'encodings_count': len(valid_encodings)
+                    }
+                }, status=201)
             else:
-                if not valid_encodings:
-                    form.add_error(None, 'No valid encodings were saved.')
-
-        # Reset progress on finish
-        cache.set(progress_key, 100, timeout=600)
+                cache.set(progress_key, 100, timeout=600)
+                all_errors = form_errors + [str(err) for err in form.errors.values()]
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Enrollment failed - please check the errors below',
+                    'errors': all_errors,
+                    'valid_encodings': len(valid_encodings)
+                }, status=400)
+        else:
+            cache.set(progress_key, 100, timeout=600)
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid form data - please check the required fields',
+                'errors': [f"{field}: {', '.join(msgs) if isinstance(msgs, list) else msgs}" for field, msgs in form.errors.items()]
+            }, status=400)
     else:
-        form = StudentForm()
-        # Reset progress on GET
-        progress_key = f"enroll_progress_{request.session.session_key}"
-        cache.set(progress_key, 0, timeout=600)
-
-    context = {'form': form}
-    return render(request, 'recognition/enroll.html', context)
+        # GET request - return form fields for client
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'POST face images to this endpoint for enrollment',
+            'required_fields': {
+                'full_name': 'string (required)',
+                'registration_number': 'string (required)',
+                'email': 'string (optional)',
+                'course': 'string (optional)',
+                'year_of_study': 'integer (optional, default: 1)',
+                'face_images': 'multiple files (required, at least 1)'
+            },
+            'constraints': {
+                'min_images': 1,
+                'all_same_person': True,
+                'min_face_size': MIN_FACE_SIZE
+            }
+        })
 
 def enroll_progress(request):
     progress_key = f"enroll_progress_{request.session.session_key}"
@@ -299,204 +357,275 @@ def enroll_progress(request):
     return JsonResponse({'progress': progress})
 
 def enroll_success(request):
-    return render(request, 'recognition/enroll_success.html')
+    """Deprecated - use API endpoint instead"""
+    return JsonResponse({
+        'status': 'deprecated',
+        'message': 'This endpoint is deprecated. Use POST /api/students/enroll/ instead.',
+        'alternative': '/api/students/'
+    }, status=410)
 
 @login_required
+@csrf_exempt
 def create_session_view(request):
-    """View for creating a new session"""
+    """Create a new recognition session"""
     if request.method == 'POST':
         form = SessionForm(request.POST)
         if form.is_valid():
             session = form.save(commit=False)
             session.created_by = request.user
-            session.status = 'ready'
+            session.status = 'ongoing'  # Only valid values: 'ongoing' or 'ended'
             session.save()
-            messages.success(request, f"Session '{session.subject}' created successfully!")
-            return redirect('recognition:session_detail', session_id=session.id)
-    else:
-        form = SessionForm()
-
-    context = {'form': form}
-    return render(request, 'recognition/start_session.html', context)
-
-def start_recognition_for_session(request, session_id, dev_mode=False):
-    """Start recognition for an existing session"""
-    session = get_object_or_404(Session, id=session_id)
-
-    # Check if session is already running
-    if str(session_id) in active_recognition:
-        active_session = active_recognition[str(session_id)]
-        if active_session.get("thread") and active_session["thread"].is_alive():
-            messages.warning(request, f"Recognition is already running for session: {session.subject}")
-            return redirect('recognition:session_detail', session_id=session_id)
-
-    # Validate session state
-    if session.status == 'ended':
-        messages.error(request, f"Cannot start session '{session.subject}' - it has already ended.")
-        return redirect('recognition:session_detail', session_id=session_id)
-
-    # Check if we have students in the class group (for non-dev mode)
-    if not dev_mode and session.class_group and session.class_group.students.count() == 0:
-        messages.warning(request, f"Class group '{session.class_group.name}' has no students. Please add students first.")
-        return redirect('recognition:session_detail', session_id=session_id)
-
-    # Check if we have any face encodings in the database (for non-dev mode)
-    if not dev_mode and not FaceEncoding.objects.exists():
-        messages.warning(request, "No face encodings found in database. Please enroll students first.")
-        return redirect('recognition:session_detail', session_id=session_id)
-
-    stop_flag = threading.Event()
-    
-    try:
-        # Start recognition in a separate thread
-        t = Thread(
-            target=run_recognition,
-            args=(str(session_id),),
-            kwargs={
-                'dev_mode': dev_mode,
-                'stop_flag': stop_flag
-            },
-            name=f"RecognitionThread-{session_id}-{'dev' if dev_mode else 'prod'}"
-        )
-        t.daemon = True
-        t.start()
-
-        # Store the thread and stop flag for management
-        active_recognition[str(session_id)] = {
-            "thread": t,
-            "stop_flag": stop_flag,
-            "started_at": timezone.now(),
-            "mode": "dev" if dev_mode else "prod"
-        }
-
-        # Update session status
-        session.status = 'ongoing'
-        session.started_by = request.user
-        session.save()
-
-        # Log the start event
-        Event.objects.create(
-            session=session,
-            event_type='session_started',
-            severity='info',
-            message=f"Session started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
-        )
-
-        # Success message with appropriate mode indication
-        mode_info = " (DEV MODE - using main.py)" if dev_mode else ""
-        messages.success(request, f"Recognition started{mode_info} for session: {session.subject}")
-
-        # Redirect to session detail with dev mode parameter if applicable
-        if dev_mode:
-            return redirect(reverse('recognition:session_detail', kwargs={'session_id': session_id}) + '?dev=1')
-        else:
-            return redirect('recognition:session_detail', session_id=session_id)
-
-    except Exception as e:
-        # Handle any errors during thread startup
-        messages.error(request, f"Failed to start recognition: {str(e)}")
-        session.status = 'ready'  # Reset status if startup failed
-        session.save()
-        
-        # Clean up if thread was partially created
-        if str(session_id) in active_recognition:
-            active_recognition.pop(str(session_id))
             
-        return redirect('recognition:session_detail', session_id=session_id)
-
-@login_required
-def start_session_view(request, session_id=None):
-    """
-    Unified view for starting recognition sessions
-    If session_id is provided: start recognition for that session
-    If no session_id: redirect to session creation
-    """
-    if session_id:
-        dev_mode = request.GET.get('dev') == '1'
-        return start_recognition_for_session(request, session_id, dev_mode)
+            return JsonResponse({
+                'status': 'success',
+                'message': f"Session '{session.subject}' created successfully!",
+                'session': {
+                    'id': session.id,
+                    'subject': session.subject,
+                    'class_group': session.class_group.id if session.class_group else None,
+                    'status': session.status,
+                    'created_at': session.created_at.isoformat() if session.created_at else None
+                }
+            }, status=201)
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid form data',
+                'errors': form.errors
+            }, status=400)
     else:
-        # Redirect to session creation view
-        return redirect('recognition:create_session_view')
+        # GET request - return form schema for client
+        return JsonResponse({
+            'status': 'ok',
+            'message': 'POST JSON data to create a new session',
+            'required_fields': {
+                'subject': 'string (required)',
+                'class_group': 'integer (optional)'
+            }
+        })
 
 def session_detail(request, session_id):
+    """Get detailed information about a session"""
     session = get_object_or_404(Session, id=session_id)
-    # Check if this session was started in dev mode
-    is_dev_mode = request.GET.get('dev') == '1' or (session.status == 'ongoing' and 'dev' in request.META.get('HTTP_REFERER', ''))
-
+    
     expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
-
-    present_records = AttendanceRecord.objects.filter(session=session)
+    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
     present_students = [record.student for record in present_records]
     absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
 
-    unidentified_faces = session.unidentified_faces.all()
-    events = session.events.order_by('-timestamp')
-
-    context = {
-        'session': session,
-        'present_students': present_students,
-        'absent_students': absent_students,
-        'unidentified_faces': unidentified_faces,
-        'events': events,
-        'is_dev_mode': is_dev_mode
-    }
-    return render(request, 'recognition/session_detail.html', context)
+    # Load events for this session to include in the response
+    events = Event.objects.filter(session=session).order_by('-timestamp')[:50]
+    
+    return JsonResponse({
+        'status': 'ok',
+        'session': {
+            'id': session.id,
+            'subject': session.subject,
+            'class_group': session.class_group.id if session.class_group else None,
+            'status': session.status,
+            'created_at': isoformat_or_none(session.created_at),
+            'started_at': isoformat_or_none(session.start_time),
+            'ended_at': isoformat_or_none(session.end_time),
+            'created_by': session.created_by.username if session.created_by else None
+        },
+        'present_students': [
+            {
+                'student_id': student.id,
+                'name': student.full_name,
+            }
+            for student in present_students
+        ],
+        'absent_students': [
+            {
+                'id': student.id,
+                'name': student.full_name,
+                'student_id': student.id
+            }
+            for student in absent_students
+        ],
+        'summary': {
+            'expected_count': expected_students.count(),
+            'present_count': len(present_students),
+            'absent_count': len(list(absent_students)),
+            'attendance_percentage': round((len(present_students) / expected_students.count() * 100), 2) if expected_students.count() > 0 else 0
+        },
+        'events': [
+            {
+                'type': event.event_type,
+                'severity': event.severity,
+                'message': event.message,
+                'timestamp': event.timestamp.isoformat() if event.timestamp else None
+            }
+            for event in events
+        ]
+    })
 
 def session_events_partial(request, session_id):
+    """Get events for a session"""
     session = get_object_or_404(Session, id=session_id)
-    events = session.events.order_by('-timestamp')[:20]
-    html = render_to_string('recognition/partials/_events_list.html', {'events': events})
-    return HttpResponse(html)
+    events = Event.objects.filter(session=session).order_by('-timestamp')[:20]
+    
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'events': [
+            {
+                'type': event.event_type,
+                'severity': event.severity,
+                'message': event.message,
+                'timestamp': event.timestamp.isoformat() if event.timestamp else None
+            }
+            for event in events
+        ]
+    })
 
 def session_present_students_partial(request, session_id):
+    """Get present students for a session"""
     session = get_object_or_404(Session, id=session_id)
     present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
     present_students = [r.student for r in present_records]
-    html = render_to_string('recognition/partials/_present_students.html', {'present_students': present_students})
-    return HttpResponse(html)
+    
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'present_students': [
+            {
+                'id': student.id,
+                'name': student.name,
+                'student_id': student.student_id
+            }
+            for student in present_students
+        ],
+        'count': len(present_students)
+    })
 
 def session_absent_students_partial(request, session_id):
+    """Get absent students for a session"""
     session = get_object_or_404(Session, id=session_id)
-    expected_students = session.class_group.students.all() if session.class_group else []
+    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
     present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
     present_students = [r.student for r in present_records]
-    absent_students = expected_students.exclude(id__in=[s.id for s in present_students]) if expected_students else []
-    html = render_to_string('recognition/partials/_absent_students.html', {'absent_students': absent_students})
-    return HttpResponse(html)
+    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
+    
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'absent_students': [
+            {
+                'id': student.id,
+                'name': student.full_name,
+                'student_id': student.id
+            }
+            for student in absent_students
+        ],
+        'count': len(list(absent_students))
+    })
 
 def session_unidentified_faces_partial(request, session_id):
+    """Get unidentified faces for a session"""
+    from recognition.models import UnidentifiedFace
+    
     session = get_object_or_404(Session, id=session_id)
-    unidentified_faces = session.unidentified_faces.all()
-    html = render_to_string('recognition/partials/_unidentified_faces.html', {'unidentified_faces': unidentified_faces})
-    return HttpResponse(html)
+    
+    try:
+        unidentified_faces = UnidentifiedFace.objects.filter(session=session)
+    except:
+        unidentified_faces = []
+    
+    # Build a safe list of unidentified faces with robust attribute checks
+    faces_list = []
+    for face in unidentified_faces:
+        image_url = None
+
+        # Preferred: Django FileField named 'image'
+        if hasattr(face, 'image'):
+            try:
+                img_field = getattr(face, 'image')
+                if img_field:
+                    try:
+                        image_url = img_field.url
+                    except Exception:
+                        # Fallback to using stored name/path if url() not available
+                        img_name = getattr(img_field, 'name', None)
+                        if img_name:
+                            image_url = os.path.join(settings.MEDIA_URL, img_name)
+            except Exception:
+                image_url = None
+
+        # Alternate attribute names that may exist on the model
+        elif hasattr(face, 'image_url'):
+            image_url = getattr(face, 'image_url', None)
+        elif hasattr(face, 'file_path'):
+            file_path = getattr(face, 'file_path', None)
+            if file_path:
+                image_url = os.path.join(settings.MEDIA_URL, file_path)
+
+        # Confidence and timestamp with safe getattr usage
+        confidence = getattr(face, 'confidence', None)
+        ts = getattr(face, 'timestamp', None)
+        timestamp = ts.isoformat() if ts else None
+
+        faces_list.append({
+            'image_url': image_url,
+            'confidence': confidence,
+            'timestamp': timestamp
+        })
+
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'unidentified_faces': faces_list,
+        'count': len(faces_list)
+    })
 
 def record_event(session, message, event_type='info'):
     Event.objects.create(session=session, message=message, event_type=event_type)
 
 def recognition_progress_partial(request, session_id):
+    """Get real-time recognition progress for a session"""
     session = get_object_or_404(Session, id=session_id)
     total_expected = session.class_group.students.count() if session.class_group else 0
-    present_count = session.attendance_records.count()
-    unknown_count = session.unidentified_faces.count()
+    present_count = AttendanceRecord.objects.filter(session=session).count()
+    
+    # Import UnidentifiedFace here to avoid NameError when the model is not in global scope
+    try:
+        from recognition.models import UnidentifiedFace
+        unknown_count = UnidentifiedFace.objects.filter(session=session).count()
+    except Exception:
+        unknown_count = 0
+    
+    active_data = active_recognition.get(str(session_id), {})
+    is_running = active_data.get("thread") and active_data["thread"].is_alive()
+    
     return JsonResponse({
-        "present_count": present_count,
-        "total_expected": total_expected,
-        "unknown_count": unknown_count,
+        'status': 'ok',
+        'session_id': session_id,
+        'progress': {
+            'present_count': present_count,
+            'total_expected': total_expected,
+            'unknown_count': unknown_count,
+            'attendance_percentage': round((present_count / total_expected * 100), 2) if total_expected > 0 else 0,
+            'is_running': is_running,
+            'mode': active_data.get('mode', 'none')
+        }
     })
 
 def end_session_view(request, session_id):
+    """End a recognition session"""
     session = get_object_or_404(Session, id=session_id)
 
     # Stop running thread/process if exists
     active = active_recognition.get(str(session_id))
     if active:
-        active["stop_flag"].set()
+        if active.get("stop_flag"):
+            active["stop_flag"].set()
 
         # Also terminate subprocess if running in dev mode
         if "process" in active and active["process"]:
-            active["process"].terminate()
-
-        print(f"Sent stop signal to recognition for session {session_id}")
+            try:
+                active["process"].terminate()
+            except Exception:
+                pass
 
         # Clean up
         active_recognition.pop(str(session_id), None)
@@ -506,40 +635,75 @@ def end_session_view(request, session_id):
         session.end_time = timezone.now()
         session.save()
 
-        Event.objects.create(
-            session=session,
-            event_type='session_ended',
-            severity='info',
-            message="Session manually ended from Django UI"
-        )
-
-        messages.success(request, f"Session '{session.subject}' ended.")
-    else:
-        messages.info(request, f"Session '{session.subject}' was already ended.")
-
-    return redirect('recognition:session_detail', session_id=session_id)
-
-def sessions_list(request):
-    sessions = Session.objects.all().order_by('-start_time')
-    
-    # Get active session information
-    active_session_info = {}
-    for session_id, session_data in active_recognition.items():
+        # Log an event for session end (fail silently if Event creation fails)
         try:
-            session_obj = Session.objects.get(id=session_id)
-            active_session_info[str(session_id)] = {
-                'is_active': session_data.get("thread") and session_data["thread"].is_alive(),
-                'mode': session_data.get("mode", "unknown")
+            Event.objects.create(
+                session=session,
+                event_type='session_ended',
+                severity='info',
+                message=f"Session '{session.subject}' ended"
+            )
+        except Exception:
+            pass
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f"Session '{session.subject}' ended successfully",
+            'session': {
+                'id': session.id,
+                'subject': session.subject,
+                'status': session.status,
+                'ended_at': isoformat_or_none(session.end_time)
             }
-        except (Session.DoesNotExist, ValueError):
-            # Clean up invalid entries
-            active_recognition.pop(session_id, None)
+        })
+    else:
+        return JsonResponse({
+            'status': 'info',
+            'message': f"Session '{session.subject}' was already ended",
+            'session': {
+                'id': session.id,
+                'subject': session.subject,
+                'status': session.status,
+                'ended_at': isoformat_or_none(session.end_time)
+            }
+        })
+def sessions_list(request):
+    """Get all sessions with their status"""
+    sessions = Session.objects.all().order_by('-created_at')
     
-    context = {
-        'sessions': sessions,
-        'active_session_info': active_session_info
-    }
-    return render(request, 'recognition/session_list.html', context)
+    sessions_data = []
+    for session in sessions:
+        active_data = active_recognition.get(str(session.id), {})
+        is_running = active_data.get("thread") and active_data["thread"].is_alive()
+
+        # Per-session counts for attendance summary
+        expected_count = session.class_group.students.count() if session.class_group else 0
+        present_count = AttendanceRecord.objects.filter(session=session).count()
+        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
+
+        sessions_data.append({
+            'id': session.id,
+            'subject': session.subject,
+            'class_group': session.class_group.name if session.class_group else None,
+            'status': session.status,
+            'created_at': isoformat_or_none(session.created_at),
+            'started_at': isoformat_or_none(session.start_time),
+            'ended_at': isoformat_or_none(session.end_time),
+            'created_by': session.created_by.username if session.created_by else None,
+            'recognition': {
+                'is_running': bool(is_running),
+                'mode': active_data.get('mode', 'none'),
+                'present_count': present_count,
+                'expected_count': expected_count,
+                'attendance_percentage': attendance_percentage
+            }
+        })
+    
+    return JsonResponse({
+        'status': 'ok',
+        'count': len(sessions_data),
+        'sessions': sessions_data
+    })
 
 def get_active_sessions(request):
     """Get list of currently active sessions"""
@@ -558,53 +722,3 @@ def get_active_sessions(request):
             active_recognition.pop(session_id, None)
     
     return active_sessions
-
-def stop_all_sessions(request):
-    """Stop all active recognition sessions (admin function)"""
-    stopped_count = 0
-    for session_id, session_data in active_recognition.items():
-        try:
-            session = Session.objects.get(id=session_id)
-            if session_data.get("stop_flag"):
-                session_data["stop_flag"].set()
-                
-            # Update session status
-            if session.status == 'ongoing':
-                session.status = 'ended'
-                session.end_time = timezone.now()
-                session.save()
-                
-                Event.objects.create(
-                    session=session,
-                    event_type='session_ended',
-                    severity='info',
-                    message="Session stopped by admin"
-                )
-                
-            stopped_count += 1
-            
-        except Session.DoesNotExist:
-            pass
-        
-        # Clean up
-        active_recognition.pop(session_id, None)
-    
-    messages.info(request, f"Stopped {stopped_count} active sessions")
-    return redirect('recognition:sessions_list')
-
-def session_status_api(request, session_id):
-    """API endpoint to check session status"""
-    session = get_object_or_404(Session, id=session_id)
-    
-    active_data = active_recognition.get(str(session_id), {})
-    thread_alive = active_data.get("thread") and active_data["thread"].is_alive()
-    
-    return JsonResponse({
-        'session_id': session_id,
-        'status': session.status,
-        'thread_alive': thread_alive,
-        'mode': active_data.get("mode", "none"),
-        'started_at': active_data.get("started_at", None),
-        'present_count': session.attendance_records.count(),
-        'unknown_count': session.unidentified_faces.count()
-    })

@@ -4,6 +4,7 @@ charset-normalizer==3.4.3
 click==8.2.1
 Django==5.2.1
 django-bootstrap5==25.1
+django-cors-headers==4.9.0
 django-htmx==1.23.2
 djangorestframework==3.16.1
 dlib==20.0.0
