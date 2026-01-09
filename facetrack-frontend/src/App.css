@@ -23,7 +23,7 @@ body {
 /* ==================== NAVBAR STYLING ==================== */
 
 .navbar {
-  background: linear-gradient(180deg, rgba(6,10,18,0.85), rgba(6,10,18,0.6)) !important;
+  /* background: linear-gradient(180deg, rgba(6,10,18,0.85), rgba(6,10,18,0.6)) !important; */
   padding: 0.75rem 0 !important;
   top: 0;
   z-index: 1100;
@@ -176,7 +176,7 @@ body {
 }
 
 .btn-primary-gradient {
-  background: linear-gradient(90deg, rgba(0,245,255,0.12), rgba(255,79,216,0.08));
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #e6fbff;
   border: 1px solid rgba(0,245,255,0.12);
   box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 30px rgba(0,245,255,0.04) inset;
@@ -355,7 +355,7 @@ body {
 /* CTA Section */
 .cta-section {
   padding: 6rem 0;
-  background: linear-gradient(90deg, rgba(0,245,255,0.06), rgba(255,79,216,0.04));
+  background: linear-gradient(180deg, #07080a 0%, #0b1320 45%, #071226 100%);
   color: #e6fbff;
   text-align: center;
   border-top: 1px solid rgba(255,255,255,0.02);
@@ -562,7 +562,9 @@ body {
   color: #6b7280;
   font-size: 0.95rem;
 }
-
+.auth-footer {
+  color: var(--text-secondary);
+}
 .form-group {
   margin-bottom: 1.5rem;
 }
@@ -692,7 +694,11 @@ body {
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
 }
-
+.error-text {
+  color: var(--error-color);
+  font-size: 0. ninerem;
+  margin-top: 0.5rem;
+}
 .form-footer {
   text-align: center;
   margin-top: 1.5rem;
@@ -886,6 +892,7 @@ body {
   padding: 1.5rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  border-radius:12px;
 }
 
 .session-subject {

@@ -33,9 +33,8 @@ const Navbar = () => {
           {user ? (
             <>
               <li className="nav-item">
-                <span className="navbar-text">Hello, {user.username}.</span>
+                <span className="navbar-text"><a className="nav-link" href="/profile">Hello, {user.username}.</a></span>
               </li>
-              <li className="nav-item"><a className="nav-link" href="/profile">Profile</a></li>
               <li className="nav-item">
                 <button className="nav-link btn btn-link" onClick={handleLogout}>
                   Logout
