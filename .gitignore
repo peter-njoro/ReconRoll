@@ -183,3 +183,8 @@ app/media/uploads/unidentified/*
 
 
 app/media/*
+
+# Collected static files (Django collectstatic output)
+staticfiles/
+
+facetrack-frontend/node_modules
