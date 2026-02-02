@@ -1,11 +1,13 @@
 import os
 import cv2
 import uuid
+import json
 import numpy as np
 import face_recognition
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -42,6 +44,7 @@ FRAME_SKIP_COUNTER = {}  # Track frame count per session for skipping
 
 
 def isoformat_or_none(dt):
+    """Helper function to convert datetime to ISO format or return None"""
     return dt.isoformat() if dt is not None else None
 
 def get_cached_known_encodings(session=None, force_reload=False):
@@ -610,8 +613,17 @@ def recognition_progress_partial(request, session_id):
         }
     })
 
+
+@require_http_methods(["POST"])
 def end_session_view(request, session_id):
-    """End a recognition session"""
+    """
+    End a recognition session
+
+    URL: /recognition/session/<uuid:session_id>/stop/
+    Method: POST
+
+    Returns JSON response with session status
+    """
     session = get_object_or_404(Session, id=session_id)
 
     # Stop running thread/process if exists
@@ -641,7 +653,7 @@ def end_session_view(request, session_id):
                 session=session,
                 event_type='session_ended',
                 severity='info',
-                message=f"Session '{session.subject}' ended"
+                message=f"Session '{session.subject}' ended via traditional view"
             )
         except Exception:
             pass
@@ -650,7 +662,7 @@ def end_session_view(request, session_id):
             'status': 'success',
             'message': f"Session '{session.subject}' ended successfully",
             'session': {
-                'id': session.id,
+                'id': str(session.id),
                 'subject': session.subject,
                 'status': session.status,
                 'ended_at': isoformat_or_none(session.end_time)
@@ -661,12 +673,202 @@ def end_session_view(request, session_id):
             'status': 'info',
             'message': f"Session '{session.subject}' was already ended",
             'session': {
-                'id': session.id,
+                'id': str(session.id),
                 'subject': session.subject,
                 'status': session.status,
                 'ended_at': isoformat_or_none(session.end_time)
             }
         })
+
+
+@require_http_methods(["POST"])
+def stop_all_sessions_view(request):
+    """
+    Stop all active recognition sessions (emergency stop)
+
+    URL: /recognition/session/stop-all/
+    Method: POST
+
+    Returns JSON response with count of stopped sessions
+    """
+    stopped_count = 0
+    stopped_sessions = []
+
+    # Iterate through all active recognition sessions
+    for session_id, session_data in list(active_recognition.items()):
+        try:
+            session = Session.objects.get(id=session_id)
+
+            # Stop the thread/process
+            if session_data.get("stop_flag"):
+                session_data["stop_flag"].set()
+
+            # Terminate subprocess if in dev mode
+            if "process" in session_data and session_data["process"]:
+                try:
+                    session_data["process"].terminate()
+                except Exception:
+                    pass
+
+            # Update session status if still ongoing
+            if session.status == 'ongoing':
+                session.status = 'ended'
+                session.end_time = timezone.now()
+                session.save()
+
+                # Log event
+                try:
+                    Event.objects.create(
+                        session=session,
+                        event_type='session_ended',
+                        severity='warning',
+                        message="Session stopped by emergency stop-all command"
+                    )
+                except Exception:
+                    pass
+
+                stopped_sessions.append({
+                    'id': str(session.id),
+                    'subject': session.subject
+                })
+                stopped_count += 1
+
+        except Session.DoesNotExist:
+            pass
+
+        # Clean up from active_recognition dict
+        active_recognition.pop(session_id, None)
+
+    return JsonResponse({
+        'status': 'success',
+        'stopped_count': stopped_count,
+        'message': f"Successfully stopped {stopped_count} session(s)",
+        'stopped_sessions': stopped_sessions
+    })
+
+
+@require_http_methods(["POST", "PATCH", "PUT"])
+def update_session_view(request, session_id):
+    """
+    Update a session (full or partial update)
+
+    URL: /recognition/session/<uuid:session_id>/update/
+    Method: POST, PATCH, or PUT
+
+    Accepts JSON body with fields to update:
+    - subject: string
+    - class_group: UUID or null
+    - status: 'scheduled', 'ongoing', or 'ended'
+
+    Returns JSON response with updated session
+    """
+    session = get_object_or_404(Session, id=session_id)
+
+    try:
+        # Parse JSON body
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+        else:
+            data = request.POST.dict()
+
+        # Validate and update allowed fields
+        updated_fields = []
+
+        if 'subject' in data:
+            session.subject = data['subject']
+            updated_fields.append('subject')
+
+        if 'class_group' in data:
+            if data['class_group']:
+                from .models import ClassGroup
+                try:
+                    class_group = ClassGroup.objects.get(id=data['class_group'])
+                    session.class_group = class_group
+                    updated_fields.append('class_group')
+                except ClassGroup.DoesNotExist:
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f"Class group with id {data['class_group']} not found"
+                    }, status=400)
+            else:
+                session.class_group = None
+                updated_fields.append('class_group')
+
+        if 'status' in data:
+            valid_statuses = ['scheduled', 'ongoing', 'ended']
+            if data['status'] in valid_statuses:
+                old_status = session.status
+                session.status = data['status']
+                updated_fields.append('status')
+
+                # If manually ending session, set end_time
+                if data['status'] == 'ended' and old_status != 'ended':
+                    session.end_time = timezone.now()
+
+                    # Also stop recognition if running
+                    active = active_recognition.get(str(session_id))
+                    if active:
+                        if active.get("stop_flag"):
+                            active["stop_flag"].set()
+                        active_recognition.pop(str(session_id), None)
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f"Invalid status. Must be one of: {valid_statuses}"
+                }, status=400)
+
+        # Save changes
+        if updated_fields:
+            session.save()
+
+            # Log update event
+            try:
+                Event.objects.create(
+                    session=session,
+                    event_type='session_updated',
+                    severity='info',
+                    message=f"Session updated: {', '.join(updated_fields)}"
+                )
+            except Exception:
+                pass
+
+            return JsonResponse({
+                'status': 'success',
+                'message': f"Session updated successfully",
+                'updated_fields': updated_fields,
+                'session': {
+                    'id': str(session.id),
+                    'subject': session.subject,
+                    'class_group': str(session.class_group.id) if session.class_group else None,
+                    'class_group_name': session.class_group.name if session.class_group else None,
+                    'status': session.status,
+                    'created_at': isoformat_or_none(session.created_at),
+                    'start_time': isoformat_or_none(session.start_time),
+                    'end_time': isoformat_or_none(session.end_time),
+                }
+            })
+        else:
+            return JsonResponse({
+                'status': 'info',
+                'message': 'No fields to update',
+                'session': {
+                    'id': str(session.id),
+                    'subject': session.subject,
+                    'status': session.status,
+                }
+            })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Invalid JSON in request body'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Error updating session: {str(e)}'
+        }, status=500)
+
 def sessions_list(request):
     """Get all sessions with their status"""
     sessions = Session.objects.all().order_by('-created_at')

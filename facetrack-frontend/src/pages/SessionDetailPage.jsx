@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { recognitionService } from '../api/recognitionService';
 
@@ -7,38 +7,49 @@ export function SessionDetailPage() {
     const [session, setSession] = useState(null);
     const [presentStudents, setPresentStudents] = useState([]);
     const [absentStudents, setAbsentStudents] = useState([]);
+    const [unidentifiedFaces, setUnidentifiedFaces] = useState([]);
     const [events, setEvents] = useState([]);
     const [progress, setProgress] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [autoRefresh, setAutoRefresh] = useState(true);
 
+    // Webcam state
+    const [isWebcamActive, setIsWebcamActive] = useState(false);
+    const [webcamError, setWebcamError] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const streamRef = useRef(null);
+    const uploadIntervalRef = useRef(null);
+
+    // Fetch session data
+    const fetchData = async () => {
+        try {
+            const [sessionRes, presentRes, absentRes, eventsRes, progressRes, unidentifiedRes] = await Promise.all([
+                recognitionService.getSession(sessionId),
+                recognitionService.getPresentStudents(sessionId),
+                recognitionService.getAbsentStudents(sessionId),
+                recognitionService.getSessionEvents(sessionId),
+                recognitionService.getProgress(sessionId),
+                recognitionService.getUnidentifiedFaces(sessionId),
+            ]);
+
+            setSession(sessionRes.data);
+            setPresentStudents(presentRes.data || []);
+            setAbsentStudents(absentRes.data || []);
+            setEvents(eventsRes.data || []);
+            setProgress(progressRes.data || null);
+            setUnidentifiedFaces(unidentifiedRes.data || []);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [sessionRes, presentRes, absentRes, eventsRes, progressRes] = await Promise.all([
-                    recognitionService.getSession(sessionId),
-                    recognitionService.getPresentStudents(sessionId),
-                    recognitionService.getAbsentStudents(sessionId),
-                    recognitionService.getSessionEvents(sessionId),
-                    recognitionService.getProgress(sessionId),
-                ]);
-
-                // Backend returns the session object at the top level (not wrapped in `session`)
-                setSession(sessionRes.data);
-                // Present/absent/events endpoints return arrays directly
-                setPresentStudents(presentRes.data || []);
-                setAbsentStudents(absentRes.data || []);
-                setEvents(eventsRes.data || []);
-                // Progress endpoint returns a stats object
-                setProgress(progressRes.data || null);
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchData();
 
         // Auto-refresh every 5 seconds if session is running
@@ -49,6 +60,124 @@ export function SessionDetailPage() {
 
         return () => clearInterval(interval);
     }, [sessionId, autoRefresh]);
+
+    // Start webcam
+    const startWebcam = async () => {
+        try {
+            setWebcamError(null);
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                }
+            });
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                streamRef.current = stream;
+                setIsWebcamActive(true);
+            }
+        } catch (err) {
+            console.error('Error accessing webcam:', err);
+            setWebcamError('Failed to access webcam. Please ensure camera permissions are granted.');
+        }
+    };
+
+    // Stop webcam
+    const stopWebcam = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        setIsWebcamActive(false);
+
+        // Stop frame uploads
+        if (uploadIntervalRef.current) {
+            clearInterval(uploadIntervalRef.current);
+            uploadIntervalRef.current = null;
+        }
+    };
+
+    // Capture and upload frame
+    const captureAndUploadFrame = async () => {
+        if (!videoRef.current || !canvasRef.current || !isProcessing) return;
+
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+
+        // Set canvas size to match video
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        // Draw current video frame to canvas
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Convert canvas to base64 JPEG
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+
+        try {
+            // Upload frame to backend
+            await recognitionService.uploadFrame(sessionId, frameData);
+        } catch (err) {
+            console.error('Error uploading frame:', err);
+        }
+    };
+
+    // Start recognition session
+    const startRecognition = async () => {
+        try {
+            setError(null);
+
+            // Start the recognition thread on the backend
+            await recognitionService.startSession(sessionId);
+
+            // Start webcam
+            await startWebcam();
+
+            // Start processing flag
+            setIsProcessing(true);
+
+            // Start uploading frames every 500ms (2 FPS)
+            uploadIntervalRef.current = setInterval(() => {
+                captureAndUploadFrame();
+            }, 500);
+
+            // Refresh data immediately
+            await fetchData();
+        } catch (err) {
+            setError('Failed to start recognition: ' + err.message);
+            setIsProcessing(false);
+        }
+    };
+
+    // Stop recognition session
+    const stopRecognition = async () => {
+        try {
+            // Stop the recognition thread on the backend
+            await recognitionService.stopSession(sessionId);
+
+            // Stop webcam and uploads
+            stopWebcam();
+            setIsProcessing(false);
+
+            // Refresh data
+            await fetchData();
+        } catch (err) {
+            setError('Failed to stop recognition: ' + err.message);
+        }
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            stopWebcam();
+        };
+    }, []);
 
     if (loading) {
         return (
@@ -107,6 +236,108 @@ export function SessionDetailPage() {
                     </div>
                 </div>
 
+                {/* Webcam Section */}
+                <div className="webcam-section">
+                    <h2><i className="bi bi-camera-video"></i> Live Camera Feed</h2>
+
+                    {webcamError && (
+                        <div className="error-alert" style={{ marginBottom: '1rem' }}>
+                            {webcamError}
+                        </div>
+                    )}
+
+                    <div className="webcam-container">
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            style={{
+                                width: '100%',
+                                maxWidth: '640px',
+                                borderRadius: '8px',
+                                backgroundColor: '#000',
+                                display: isWebcamActive ? 'block' : 'none'
+                            }}
+                        />
+
+                        {!isWebcamActive && (
+                            <div style={{
+                                width: '100%',
+                                maxWidth: '640px',
+                                height: '480px',
+                                backgroundColor: '#1f2937',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#9ca3af'
+                            }}>
+                                <i className="bi bi-camera-video-off" style={{ fontSize: '48px' }}></i>
+                            </div>
+                        )}
+
+                        {/* Hidden canvas for frame capture */}
+                        <canvas ref={canvasRef} style={{ display: 'none' }} />
+                    </div>
+
+                    <div className="webcam-controls" style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+                        {!isProcessing ? (
+                            <button
+                                className="btn-start-recognition"
+                                onClick={startRecognition}
+                                disabled={session.status === 'ended'}
+                                style={{
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#10b981',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: session.status === 'ended' ? 'not-allowed' : 'pointer',
+                                    fontSize: '16px',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                <i className="bi bi-play-circle"></i> Start Recognition
+                            </button>
+                        ) : (
+                            <button
+                                className="btn-stop-recognition"
+                                onClick={stopRecognition}
+                                style={{
+                                    padding: '0.75rem 1.5rem',
+                                    backgroundColor: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    fontSize: '16px',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                <i className="bi bi-stop-circle"></i> Stop Recognition
+                            </button>
+                        )}
+
+                        {isProcessing && (
+                            <span style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                color: '#10b981',
+                                fontWeight: '500'
+                            }}>
+                                <div className="loading-spinner" style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    marginRight: '0.5rem',
+                                    borderWidth: '2px'
+                                }}></div>
+                                Processing...
+                            </span>
+                        )}
+                    </div>
+                </div>
+
                 {progress && (
                     <div className="progress-section">
                         <h2><i className="bi bi-graph-up"></i> Recognition Progress</h2>
@@ -137,16 +368,53 @@ export function SessionDetailPage() {
                     </div>
                 )}
 
+                {/* Unidentified Faces Section */}
+                {unidentifiedFaces.length > 0 && (
+                    <div className="unidentified-section">
+                        <h2><i className="bi bi-question-circle"></i> Unidentified Faces ({unidentifiedFaces.length})</h2>
+                        <div className="unidentified-grid" style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                            gap: '1rem',
+                            marginTop: '1rem'
+                        }}>
+                            {unidentifiedFaces.map(face => (
+                                <div key={face.id} className="unidentified-item" style={{
+                                    border: '2px solid #f59e0b',
+                                    borderRadius: '8px',
+                                    padding: '0.5rem',
+                                    textAlign: 'center'
+                                }}>
+                                    {face.cropped_face && (
+                                        <img
+                                            src={face.cropped_face}
+                                            alt="Unidentified face"
+                                            style={{
+                                                width: '100%',
+                                                borderRadius: '4px',
+                                                marginBottom: '0.5rem'
+                                            }}
+                                        />
+                                    )}
+                                    <small style={{ color: '#6b7280' }}>
+                                        {face.timestamp ? new Date(face.timestamp).toLocaleTimeString() : 'Unknown time'}
+                                    </small>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="students-section">
                     <div className="students-list">
                         <h3><i className="bi bi-check-circle"></i> Present Students ({presentStudents.length})</h3>
                         {presentStudents.length > 0 ? (
                             <ul>
                                 {presentStudents.map(student => (
-                                            <li key={student.id}>
-                                                <i className="bi bi-person-check"></i> {student.full_name} ({student.registration_number})
-                                            </li>
-                                        ))}
+                                    <li key={student.id}>
+                                        <i className="bi bi-person-check"></i> {student.full_name} ({student.registration_number})
+                                    </li>
+                                ))}
                             </ul>
                         ) : (
                             <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No present students yet</p>
@@ -195,15 +463,6 @@ export function SessionDetailPage() {
                         />
                         <span>Auto-refresh every 5 seconds</span>
                     </label>
-
-                    {session.status === 'ongoing' && (
-                        <button 
-                            className="btn-end-session"
-                            onClick={() => endSession(sessionId)}
-                        >
-                            <i className="bi bi-stop-circle"></i> End Session
-                        </button>
-                    )}
                 </div>
             </div>
         </div>

@@ -17,7 +17,9 @@ urlpatterns = [
     # Session management
     path('sessions/', views.sessions_list, name='sessions_list'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
-    path('session/<uuid:session_id>/end/', views.end_session_view, name='end_session'),
+    path('session/<uuid:session_id>/stop/', views.end_session_view, name='end_session'),
+    path('session/<uuid:session_id>/stop-all/', views.stop_all_sessions_view, name='stop_all_sessions'),
+    path('session/<uuid:session_id>/update/', views.update_session_view, name='update_session'),
     
     # API endpoints
     
@@ -29,5 +31,5 @@ urlpatterns = [
     path('session/<uuid:session_id>/progress_partial/', views.recognition_progress_partial, name='recognition_progress_partial'),
 
     # frame fowarding for windows
-    path("api/upload_frame/", views.upload_frame, name="upload_frame"),
+    path("session/<uuid:session_id>/upload_frame/", views.upload_frame, name="upload_frame"),
 ]
