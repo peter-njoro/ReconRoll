@@ -235,7 +235,7 @@ body {
 /* Features Section */
 .features-section {
   padding: 6rem 0;
-  background: linear-gradient(180deg, rgba(5,8,12,0.4), transparent);
+  /* background: linear-gradient(180deg, rgba(5,8,12,0.4), transparent); */
 }
 
 .section-title {
@@ -514,7 +514,7 @@ body {
 .auth-page {
   padding-top: 80px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  /* background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -842,7 +842,7 @@ body {
 .sessions-page {
   padding-top: 80px;
   min-height: 100vh;
-  background: white;
+  /* background: white; */
   padding-bottom: 3rem;
 }
 
@@ -1325,7 +1325,7 @@ body {
 .create-session-page {
   padding-top: 80px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  /* background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1380,7 +1380,7 @@ body {
 .enrollment-page {
   padding-top: 80px;
   min-height: 100vh;
-  background: white;
+  /* background: white; */
   padding-bottom: 3rem;
 }
 

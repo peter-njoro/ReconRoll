@@ -42,7 +42,10 @@ body {
   background: linear-gradient(180deg, #07080a 0%, #0b1320 45%, #071226 100%);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(0, 188, 212, 0.1);
-  padding: 1rem 0;
+  padding: 1rem 0 !important;
+  height: 5rem;
+  box-shadow: var(--box-shadow);
+  transition: var(--transition);
 }
 
 .navbar-brand {
@@ -488,4 +491,16 @@ a:hover {
 .remove-image-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.empty-state {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+.page-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  color: var(--secondary-color);
+  font-size: 2rem;
+  font-weight: 700; 
 }
