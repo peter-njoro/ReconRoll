@@ -20,9 +20,14 @@ export const recognitionService = {
     // -----------------------------------------------------------------------
 
     startSession: (sessionId, devMode = false) =>
-        apiClient.post(`/session/${sessionId}/start/`, {}, {
-            params: { dev_mode: devMode ? 'true' : 'false' },
-        }),
+        apiClient.post(
+            `/session/${sessionId}/start/`,
+            {},
+            {
+                params: { dev_mode: devMode },
+            }
+        ),
+
     stopSession: (sessionId) => apiClient.post(`/sessions/${sessionId}/stop/`),
     stopAllSessions: () => apiClient.post('/sessions/stop_all/'),
     getSessionStatus: (sessionId) => apiClient.get(`/sessions/${sessionId}/status/`),
@@ -31,8 +36,8 @@ export const recognitionService = {
     // Sessions – update  (DRF router)
     // -----------------------------------------------------------------------
 
-    updateSessionFull:    (sessionId, data) => apiClient().put(`/sessions/${sessionId}/`, data),
-    updateSession:        (sessionId, data) => apiClient.patch(`/sessions/${sessionId}/`, data),
+    updateSessionFull: (sessionId, data) => apiClient().put(`/sessions/${sessionId}/`, data),
+    updateSession: (sessionId, data) => apiClient.patch(`/sessions/${sessionId}/`, data),
 
     // -----------------------------------------------------------------------
     // Frame upload (DRF router)
