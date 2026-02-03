@@ -2,6 +2,7 @@ import os
 import cv2
 import uuid
 import json
+import threading
 import numpy as np
 import face_recognition
 from django.conf import settings
@@ -407,6 +408,63 @@ def create_session_view(request):
             }
         })
 
+def sessions_list(request):
+    """Get all sessions with their status"""
+    sessions = Session.objects.all().order_by('-created_at')
+    
+    sessions_data = []
+    for session in sessions:
+        active_data = active_recognition.get(str(session.id), {})
+        is_running = active_data.get("thread") and active_data["thread"].is_alive()
+
+        # Per-session counts for attendance summary
+        expected_count = session.class_group.students.count() if session.class_group else 0
+        present_count = AttendanceRecord.objects.filter(session=session).count()
+        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
+
+        sessions_data.append({
+            'id': session.id,
+            'subject': session.subject,
+            'class_group': session.class_group.name if session.class_group else None,
+            'status': session.status,
+            'created_at': isoformat_or_none(session.created_at),
+            'started_at': isoformat_or_none(session.start_time),
+            'ended_at': isoformat_or_none(session.end_time),
+            'created_by': session.created_by.username if session.created_by else None,
+            'recognition': {
+                'is_running': bool(is_running),
+                'mode': active_data.get('mode', 'none'),
+                'present_count': present_count,
+                'expected_count': expected_count,
+                'attendance_percentage': attendance_percentage
+            }
+        })
+    
+    return JsonResponse({
+        'status': 'ok',
+        'count': len(sessions_data),
+        'sessions': sessions_data
+    })
+
+def get_active_sessions(request):
+    """Get list of currently active sessions"""
+    active_sessions = []
+    for session_id, session_data in active_recognition.items():
+        try:
+            session = Session.objects.get(id=session_id)
+            active_sessions.append({
+                'session': session,
+                'thread_alive': session_data.get("thread", None) and session_data["thread"].is_alive(),
+                'mode': session_data.get("mode", "unknown"),
+                'started_at': session_data.get("started_at", timezone.now())
+            })
+        except Session.DoesNotExist:
+            # Clean up non-existent sessions
+            active_recognition.pop(session_id, None)
+    
+    return active_sessions
+
+
 def session_detail(request, session_id):
     """Get detailed information about a session"""
     session = get_object_or_404(Session, id=session_id)
@@ -463,155 +521,114 @@ def session_detail(request, session_id):
         ]
     })
 
-def session_events_partial(request, session_id):
-    """Get events for a session"""
-    session = get_object_or_404(Session, id=session_id)
-    events = Event.objects.filter(session=session).order_by('-timestamp')[:20]
-    
-    return JsonResponse({
-        'status': 'ok',
-        'session_id': session_id,
-        'events': [
-            {
-                'type': event.event_type,
-                'severity': event.severity,
-                'message': event.message,
-                'timestamp': event.timestamp.isoformat() if event.timestamp else None
-            }
-            for event in events
-        ]
-    })
+@require_http_methods(["POST"])
+def start_session_view(request, session_id):
+    """
+    Start the recognition thread for a session.
 
-def session_present_students_partial(request, session_id):
-    """Get present students for a session"""
-    session = get_object_or_404(Session, id=session_id)
-    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
-    present_students = [r.student for r in present_records]
-    
-    return JsonResponse({
-        'status': 'ok',
-        'session_id': session_id,
-        'present_students': [
-            {
-                'id': student.id,
-                'name': student.name,
-                'student_id': student.student_id
-            }
-            for student in present_students
-        ],
-        'count': len(present_students)
-    })
+    Mirrors the logic in SessionViewSet.start() so that the traditional
+    Django URL can be called from the React frontend without going through
+    the DRF router.
 
-def session_absent_students_partial(request, session_id):
-    """Get absent students for a session"""
+    Query params:
+        dev_mode  – 'true' | 'false'  (default 'false')
+    """
     session = get_object_or_404(Session, id=session_id)
-    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
-    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
-    present_students = [r.student for r in present_records]
-    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
-    
-    return JsonResponse({
-        'status': 'ok',
-        'session_id': session_id,
-        'absent_students': [
-            {
-                'id': student.id,
-                'name': student.full_name,
-                'student_id': student.id
-            }
-            for student in absent_students
-        ],
-        'count': len(list(absent_students))
-    })
+    dev_mode = request.GET.get('dev_mode', 'false').lower() == 'true'
 
-def session_unidentified_faces_partial(request, session_id):
-    """Get unidentified faces for a session"""
-    from recognition.models import UnidentifiedFace
-    
-    session = get_object_or_404(Session, id=session_id)
-    
+    # ------------------------------------------------------------------
+    # 1. Guard: thread already running for this session
+    # ------------------------------------------------------------------
+    if str(session_id) in active_recognition:
+        existing = active_recognition[str(session_id)]
+        if existing.get("thread") and existing["thread"].is_alive():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Recognition is already running for session: {session.subject}'
+            }, status=400)
+
+    # ------------------------------------------------------------------
+    # 2. Guard: session already ended
+    # ------------------------------------------------------------------
+    if session.status == 'ended':
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Cannot start session – it has already ended'
+        }, status=400)
+
+    # ------------------------------------------------------------------
+    # 3. Guard: class group has no students (prod mode only)
+    # ------------------------------------------------------------------
+    if not dev_mode and session.class_group and session.class_group.students.count() == 0:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Class group has no students. Please add students first.'
+        }, status=400)
+
+    # ------------------------------------------------------------------
+    # 4. Guard: no face encodings enrolled yet (prod mode only)
+    # ------------------------------------------------------------------
+    if not dev_mode and not FaceEncoding.objects.exists():
+        return JsonResponse({
+            'status': 'error',
+            'message': 'No face encodings found in database. Please enroll students first.'
+        }, status=400)
+
+    # ------------------------------------------------------------------
+    # 5. Spawn the recognition thread
+    # ------------------------------------------------------------------
+    stop_flag = threading.Event()
+
     try:
-        unidentified_faces = UnidentifiedFace.objects.filter(session=session)
-    except:
-        unidentified_faces = []
-    
-    # Build a safe list of unidentified faces with robust attribute checks
-    faces_list = []
-    for face in unidentified_faces:
-        image_url = None
+        t = threading.Thread(
+            target=run_recognition,
+            args=(str(session_id),),
+            kwargs={
+                'dev_mode': dev_mode,
+                'stop_flag': stop_flag,
+            },
+            name=f"RecognitionThread-{session_id}-{'dev' if dev_mode else 'prod'}",
+        )
+        t.daemon = True
+        t.start()
 
-        # Preferred: Django FileField named 'image'
-        if hasattr(face, 'image'):
-            try:
-                img_field = getattr(face, 'image')
-                if img_field:
-                    try:
-                        image_url = img_field.url
-                    except Exception:
-                        # Fallback to using stored name/path if url() not available
-                        img_name = getattr(img_field, 'name', None)
-                        if img_name:
-                            image_url = os.path.join(settings.MEDIA_URL, img_name)
-            except Exception:
-                image_url = None
+        # Register in the global dict so stop / status can find it later
+        active_recognition[str(session_id)] = {
+            "thread": t,
+            "stop_flag": stop_flag,
+            "started_at": timezone.now(),
+            "mode": "dev" if dev_mode else "prod",
+        }
 
-        # Alternate attribute names that may exist on the model
-        elif hasattr(face, 'image_url'):
-            image_url = getattr(face, 'image_url', None)
-        elif hasattr(face, 'file_path'):
-            file_path = getattr(face, 'file_path', None)
-            if file_path:
-                image_url = os.path.join(settings.MEDIA_URL, file_path)
+        # ------------------------------------------------------------------
+        # 6. Persist status change
+        # ------------------------------------------------------------------
+        session.status = 'ongoing'
+        session.start_time = timezone.now()
+        if request.user.is_authenticated:
+            session.created_by = request.user
+        session.save()
 
-        # Confidence and timestamp with safe getattr usage
-        confidence = getattr(face, 'confidence', None)
-        ts = getattr(face, 'timestamp', None)
-        timestamp = ts.isoformat() if ts else None
+        Event.objects.create(
+            session=session,
+            event_type='session_started',
+            severity='info',
+            message=f"Session started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
+        )
 
-        faces_list.append({
-            'image_url': image_url,
-            'confidence': confidence,
-            'timestamp': timestamp
+        return JsonResponse({
+            'status': 'started',
+            'session_id': str(session_id),
+            'subject': session.subject,
+            'mode': 'dev' if dev_mode else 'prod',
+            'message': f"Recognition started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
         })
 
-    return JsonResponse({
-        'status': 'ok',
-        'session_id': session_id,
-        'unidentified_faces': faces_list,
-        'count': len(faces_list)
-    })
-
-def record_event(session, message, event_type='info'):
-    Event.objects.create(session=session, message=message, event_type=event_type)
-
-def recognition_progress_partial(request, session_id):
-    """Get real-time recognition progress for a session"""
-    session = get_object_or_404(Session, id=session_id)
-    total_expected = session.class_group.students.count() if session.class_group else 0
-    present_count = AttendanceRecord.objects.filter(session=session).count()
-    
-    # Import UnidentifiedFace here to avoid NameError when the model is not in global scope
-    try:
-        from recognition.models import UnidentifiedFace
-        unknown_count = UnidentifiedFace.objects.filter(session=session).count()
-    except Exception:
-        unknown_count = 0
-    
-    active_data = active_recognition.get(str(session_id), {})
-    is_running = active_data.get("thread") and active_data["thread"].is_alive()
-    
-    return JsonResponse({
-        'status': 'ok',
-        'session_id': session_id,
-        'progress': {
-            'present_count': present_count,
-            'total_expected': total_expected,
-            'unknown_count': unknown_count,
-            'attendance_percentage': round((present_count / total_expected * 100), 2) if total_expected > 0 else 0,
-            'is_running': is_running,
-            'mode': active_data.get('mode', 'none')
-        }
-    })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to start recognition: {str(e)}'
+        }, status=500)
 
 
 @require_http_methods(["POST"])
@@ -869,58 +886,152 @@ def update_session_view(request, session_id):
             'message': f'Error updating session: {str(e)}'
         }, status=500)
 
-def sessions_list(request):
-    """Get all sessions with their status"""
-    sessions = Session.objects.all().order_by('-created_at')
-    
-    sessions_data = []
-    for session in sessions:
-        active_data = active_recognition.get(str(session.id), {})
-        is_running = active_data.get("thread") and active_data["thread"].is_alive()
-
-        # Per-session counts for attendance summary
-        expected_count = session.class_group.students.count() if session.class_group else 0
-        present_count = AttendanceRecord.objects.filter(session=session).count()
-        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
-
-        sessions_data.append({
-            'id': session.id,
-            'subject': session.subject,
-            'class_group': session.class_group.name if session.class_group else None,
-            'status': session.status,
-            'created_at': isoformat_or_none(session.created_at),
-            'started_at': isoformat_or_none(session.start_time),
-            'ended_at': isoformat_or_none(session.end_time),
-            'created_by': session.created_by.username if session.created_by else None,
-            'recognition': {
-                'is_running': bool(is_running),
-                'mode': active_data.get('mode', 'none'),
-                'present_count': present_count,
-                'expected_count': expected_count,
-                'attendance_percentage': attendance_percentage
-            }
-        })
+def session_events_partial(request, session_id):
+    """Get events for a session"""
+    session = get_object_or_404(Session, id=session_id)
+    events = Event.objects.filter(session=session).order_by('-timestamp')[:20]
     
     return JsonResponse({
         'status': 'ok',
-        'count': len(sessions_data),
-        'sessions': sessions_data
+        'session_id': session_id,
+        'events': [
+            {
+                'type': event.event_type,
+                'severity': event.severity,
+                'message': event.message,
+                'timestamp': event.timestamp.isoformat() if event.timestamp else None
+            }
+            for event in events
+        ]
     })
 
-def get_active_sessions(request):
-    """Get list of currently active sessions"""
-    active_sessions = []
-    for session_id, session_data in active_recognition.items():
-        try:
-            session = Session.objects.get(id=session_id)
-            active_sessions.append({
-                'session': session,
-                'thread_alive': session_data.get("thread", None) and session_data["thread"].is_alive(),
-                'mode': session_data.get("mode", "unknown"),
-                'started_at': session_data.get("started_at", timezone.now())
-            })
-        except Session.DoesNotExist:
-            # Clean up non-existent sessions
-            active_recognition.pop(session_id, None)
+def session_present_students_partial(request, session_id):
+    """Get present students for a session"""
+    session = get_object_or_404(Session, id=session_id)
+    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
+    present_students = [r.student for r in present_records]
     
-    return active_sessions
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'present_students': [
+            {
+                'id': student.id,
+                'name': student.name,
+                'student_id': student.student_id
+            }
+            for student in present_students
+        ],
+        'count': len(present_students)
+    })
+
+def session_absent_students_partial(request, session_id):
+    """Get absent students for a session"""
+    session = get_object_or_404(Session, id=session_id)
+    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
+    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
+    present_students = [r.student for r in present_records]
+    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
+    
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'absent_students': [
+            {
+                'id': student.id,
+                'name': student.full_name,
+                'student_id': student.id
+            }
+            for student in absent_students
+        ],
+        'count': len(list(absent_students))
+    })
+
+def session_unidentified_faces_partial(request, session_id):
+    """Get unidentified faces for a session"""
+    from recognition.models import UnidentifiedFace
+    
+    session = get_object_or_404(Session, id=session_id)
+    
+    try:
+        unidentified_faces = UnidentifiedFace.objects.filter(session=session)
+    except:
+        unidentified_faces = []
+    
+    # Build a safe list of unidentified faces with robust attribute checks
+    faces_list = []
+    for face in unidentified_faces:
+        image_url = None
+
+        # Preferred: Django FileField named 'image'
+        if hasattr(face, 'image'):
+            try:
+                img_field = getattr(face, 'image')
+                if img_field:
+                    try:
+                        image_url = img_field.url
+                    except Exception:
+                        # Fallback to using stored name/path if url() not available
+                        img_name = getattr(img_field, 'name', None)
+                        if img_name:
+                            image_url = os.path.join(settings.MEDIA_URL, img_name)
+            except Exception:
+                image_url = None
+
+        # Alternate attribute names that may exist on the model
+        elif hasattr(face, 'image_url'):
+            image_url = getattr(face, 'image_url', None)
+        elif hasattr(face, 'file_path'):
+            file_path = getattr(face, 'file_path', None)
+            if file_path:
+                image_url = os.path.join(settings.MEDIA_URL, file_path)
+
+        # Confidence and timestamp with safe getattr usage
+        confidence = getattr(face, 'confidence', None)
+        ts = getattr(face, 'timestamp', None)
+        timestamp = ts.isoformat() if ts else None
+
+        faces_list.append({
+            'image_url': image_url,
+            'confidence': confidence,
+            'timestamp': timestamp
+        })
+
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'unidentified_faces': faces_list,
+        'count': len(faces_list)
+    })
+
+def record_event(session, message, event_type='info'):
+    Event.objects.create(session=session, message=message, event_type=event_type)
+
+def recognition_progress_partial(request, session_id):
+    """Get real-time recognition progress for a session"""
+    session = get_object_or_404(Session, id=session_id)
+    total_expected = session.class_group.students.count() if session.class_group else 0
+    present_count = AttendanceRecord.objects.filter(session=session).count()
+    
+    # Import UnidentifiedFace here to avoid NameError when the model is not in global scope
+    try:
+        from recognition.models import UnidentifiedFace
+        unknown_count = UnidentifiedFace.objects.filter(session=session).count()
+    except Exception:
+        unknown_count = 0
+    
+    active_data = active_recognition.get(str(session_id), {})
+    is_running = active_data.get("thread") and active_data["thread"].is_alive()
+    
+    return JsonResponse({
+        'status': 'ok',
+        'session_id': session_id,
+        'progress': {
+            'present_count': present_count,
+            'total_expected': total_expected,
+            'unknown_count': unknown_count,
+            'attendance_percentage': round((present_count / total_expected * 100), 2) if total_expected > 0 else 0,
+            'is_running': is_running,
+            'mode': active_data.get('mode', 'none')
+        }
+    })

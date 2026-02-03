@@ -2,7 +2,6 @@
 
 from django.urls import path
 from . import views
-
 app_name = 'recognition'
 
 urlpatterns = [
@@ -17,6 +16,7 @@ urlpatterns = [
     # Session management
     path('sessions/', views.sessions_list, name='sessions_list'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
+    path('session/<uuid:session_id>/start/', views.start_session_view, name='start_session'),
     path('session/<uuid:session_id>/stop/', views.end_session_view, name='end_session'),
     path('session/<uuid:session_id>/stop-all/', views.stop_all_sessions_view, name='stop_all_sessions'),
     path('session/<uuid:session_id>/update/', views.update_session_view, name='update_session'),
@@ -30,6 +30,6 @@ urlpatterns = [
     path('session/<uuid:session_id>/unidentified_partial/', views.session_unidentified_faces_partial, name='session_unidentified_partial'),
     path('session/<uuid:session_id>/progress_partial/', views.recognition_progress_partial, name='recognition_progress_partial'),
 
-    # frame fowarding for windows
+    # frame fowarding
     path("session/<uuid:session_id>/upload_frame/", views.upload_frame, name="upload_frame"),
 ]
