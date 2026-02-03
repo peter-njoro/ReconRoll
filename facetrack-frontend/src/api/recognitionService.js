@@ -11,9 +11,10 @@ export const recognitionService = {
     // -----------------------------------------------------------------------
 
     listSessions: () => apiClient.get('/sessions/'),
-    getSession: (sessionId) => apiClient.get(`/sessions/${sessionId}/`),
-    createSession: (data) => apiClient.post('/sessions/', data),
-    deleteSession: (sessionId) => apiClient().delete(`/sessions/${sessionId}/`),
+    getSession: (sessionId) => apiClient.get(`/session/${sessionId}/`),
+    createSession: (data) => apiClient.post('/session/create/', data),
+    deleteSession: (sessionId) => apiClient().delete(`/session/${sessionId}/`),
+
 
     // -----------------------------------------------------------------------
     // Sessions – control actions  (DRF router)
@@ -28,23 +29,23 @@ export const recognitionService = {
             }
         ),
 
-    stopSession: (sessionId) => apiClient.post(`/sessions/${sessionId}/stop/`),
+    stopSession: (sessionId) => apiClient.post(`/session/${sessionId}/stop/`),
     stopAllSessions: () => apiClient.post('/sessions/stop_all/'),
-    getSessionStatus: (sessionId) => apiClient.get(`/sessions/${sessionId}/status/`),
+    getSessionStatus: (sessionId) => apiClient.get(`/session/${sessionId}/status/`),
 
     // -----------------------------------------------------------------------
     // Sessions – update  (DRF router)
     // -----------------------------------------------------------------------
 
-    updateSessionFull: (sessionId, data) => apiClient().put(`/sessions/${sessionId}/`, data),
-    updateSession: (sessionId, data) => apiClient.patch(`/sessions/${sessionId}/`, data),
+    updateSessionFull: (sessionId, data) => apiClient().put(`/session/${sessionId}/`, data),
+    updateSession: (sessionId, data) => apiClient.patch(`/session/${sessionId}/`, data),
 
     // -----------------------------------------------------------------------
     // Frame upload (DRF router)
     // -----------------------------------------------------------------------
 
     uploadFrame: (sessionId, frameData) =>
-        apiClient.post(`/sessions/${sessionId}/upload_frame/`, { frame: frameData }),
+        apiClient.post(`/session/${sessionId}/upload_frame/`, { frame: frameData }),
 
     // -----------------------------------------------------------------------
     // Session detail data – traditional Django partial views.

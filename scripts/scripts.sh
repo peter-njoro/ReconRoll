@@ -87,21 +87,21 @@ echo "Collecting static files..."
 python manage.py collectstatic --noinput
 
 # Create superuser COMMENT IF YOU WANT A SUPERUSER I DON'T SEE THE POINT NOW TBH
-if [ "$CREATE_SUPERUSER" = "true" ]; then
-    echo "Creating superuser..."
-    python manage.py shell <<EOF
-from django.contrib.auth import get_user_model
-User = get_user_model()
-if not User.objects.filter(username='${DJANGO_SUPERUSER_USERNAME}').exists():
-    User.objects.create_superuser(
-        username='${DJANGO_SUPERUSER_USERNAME}',
-        email='${DJANGO_SUPERUSER_EMAIL}',
-        password='${DJANGO_SUPERUSER_PASSWORD}'
-    )
-EOF
-else
-    echo "Superuser creation skipped."
-fi
+# if [ "$CREATE_SUPERUSER" = "true" ]; then
+#     echo "Creating superuser..."
+#     python manage.py shell <<EOF
+# from django.contrib.auth import get_user_model
+# User = get_user_model()
+# if not User.objects.filter(username='${DJANGO_SUPERUSER_USERNAME}').exists():
+#     User.objects.create_superuser(
+#         username='${DJANGO_SUPERUSER_USERNAME}',
+#         email='${DJANGO_SUPERUSER_EMAIL}',
+#         password='${DJANGO_SUPERUSER_PASSWORD}'
+#     )
+# EOF
+# else
+#     echo "Superuser creation skipped."
+# fi
 
 # If FRAME_FORWARDER is enabled, run webcam_stream.py in background
 if [ "$FRAME_FORWARDER" = "true" ]; then

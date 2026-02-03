@@ -15,10 +15,10 @@ urlpatterns = [
     
     # Session management
     path('sessions/', views.sessions_list, name='sessions_list'),
+    path('sessions/stop-all/', views.stop_all_sessions_view, name='stop_all_sessions'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
     path('session/<uuid:session_id>/start/', views.start_session_view, name='start_session'),
     path('session/<uuid:session_id>/stop/', views.end_session_view, name='end_session'),
-    path('session/<uuid:session_id>/stop-all/', views.stop_all_sessions_view, name='stop_all_sessions'),
     path('session/<uuid:session_id>/update/', views.update_session_view, name='update_session'),
     
     # API endpoints

@@ -373,20 +373,32 @@ def enroll_success(request):
 def create_session_view(request):
     """Create a new recognition session"""
     if request.method == 'POST':
-        form = SessionForm(request.POST)
+        # axios (and every other JSON client) sends Content-Type:
+        # application/json.  Django only populates request.POST for
+        # application/x-www-form-urlencoded bodies, so request.POST
+        # is an empty QueryDict here.  Parse the raw body instead.
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Request body is not valid JSON'
+            }, status=400)
+
+        form = SessionForm(data)
         if form.is_valid():
             session = form.save(commit=False)
             session.created_by = request.user
-            session.status = 'ongoing'  # Only valid values: 'ongoing' or 'ended'
+            session.status = 'ongoing'
             session.save()
-            
+
             return JsonResponse({
                 'status': 'success',
                 'message': f"Session '{session.subject}' created successfully!",
                 'session': {
-                    'id': session.id,
+                    'id': str(session.id),
                     'subject': session.subject,
-                    'class_group': session.class_group.id if session.class_group else None,
+                    'class_group': str(session.class_group.id) if session.class_group else None,
                     'status': session.status,
                     'created_at': session.created_at.isoformat() if session.created_at else None
                 }
@@ -398,7 +410,7 @@ def create_session_view(request):
                 'errors': form.errors
             }, status=400)
     else:
-        # GET request - return form schema for client
+        # GET – return the expected shape so clients know what to send
         return JsonResponse({
             'status': 'ok',
             'message': 'POST JSON data to create a new session',

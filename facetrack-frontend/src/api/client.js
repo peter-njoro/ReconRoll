@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 // const DJANGO_BASE_URL = process.env.REACT_APP_DJANGO_URL || 'http://localhost:8000/recognition';
 const apiClient = axios.create({
     baseURL: API_BASE_URL,

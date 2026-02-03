@@ -172,7 +172,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split() if os.environ.get("CSRF_TRUSTED_ORIGINS") else []
+CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS")
 
 # ===== FACE RECOGNITION CONFIGURATION =====
 # Paths for face encodings and ID cards
