@@ -6,7 +6,7 @@ export function CreateSessionPage() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
         subject: '',
-        class_group_name: '',
+        class_group: '',  // ← CHANGED from class_group_name
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -26,28 +26,27 @@ export function CreateSessionPage() {
         setLoading(true);
         setError(null);
         
-            console.log('Form submitted with data:', {
+        console.log('Form submitted with data:', {
             subject: formData.subject,
-            class_group_name: formData.class_group_name || null,
+            class_group: formData.class_group || null,  // ← CHANGED
         });
 
         try {
             const response = await recognitionService.createSession({
                 subject: formData.subject,
-                class_group_name: formData.class_group_name || null,
+                class_group: formData.class_group || null,  // ← CHANGED
             });
 
             console.log('Session created successfully:', response.data);
             // response.data contains the session object; navigate using its id
             alert('Session created');
-            navigate(`/session/${response.data.id}`);
+            navigate(`/session/${response.data.session.id}`);  // Note: response wraps session in .session
         } catch (err) {
             console.error('Error creating session:', err);
             console.error('Error response data:', err.response?.data);
             console.error('Error message:', err.message);
             
             const errorMessage = 
-                err.response?.data?.message ||
                 err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
                 err.message;
@@ -101,14 +100,33 @@ export function CreateSessionPage() {
                                 <label htmlFor="class_group">Class Group (Optional)</label>
                                 <div className="input-wrapper">
                                     <i className="bi bi-folder"></i>
-                                        <input
-                                            type="text"
-                                            id="class_group_name"
-                                            name="class_group_name"
-                                            placeholder="Enter class group name (e.g., CS101)"
-                                            value={formData.class_group_name}
-                                            onChange={handleChange}
-                                        />
+                                    {/* 
+                                        TODO: This needs to be a <select> dropdown that fetches
+                                        ClassGroup objects from the API and sends the ID, not a name.
+                                        
+                                        The class_group field is a ForeignKey that expects a UUID/ID.
+                                        For now, you can either:
+                                        1. Leave this empty (class_group is optional)
+                                        2. Change to a <select> that calls recognitionService.getClassGroups()
+                                           and populates options with { value: group.id, label: group.name }
+                                        
+                                        Example select implementation:
+                                        
+                                        <select name="class_group" value={formData.class_group} onChange={handleChange}>
+                                            <option value="">-- None --</option>
+                                            {classGroups.map(group => (
+                                                <option key={group.id} value={group.id}>{group.name}</option>
+                                            ))}
+                                        </select>
+                                    */}
+                                    <input
+                                        type="text"
+                                        id="class_group"
+                                        name="class_group"  // ← CHANGED from class_group_name
+                                        placeholder="Enter class group ID (or leave empty)"
+                                        value={formData.class_group}
+                                        onChange={handleChange}
+                                    />
                                 </div>
                             </div>
 
