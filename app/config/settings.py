@@ -172,7 +172,10 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',
+    'http://localhost:8000',
+]
 
 # ===== FACE RECOGNITION CONFIGURATION =====
 # Paths for face encodings and ID cards
