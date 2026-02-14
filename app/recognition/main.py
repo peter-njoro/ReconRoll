@@ -24,7 +24,7 @@ except Exception as e:
     traceback.print_exc()
     exit(1)
 
-from recognition.models import Session, AttendanceRecord, FaceEncoding, Student, UnidentifiedFace, Event
+from recognition.models import Session, AttendanceSummary, FaceEncoding, Person, UnidentifiedFace, Event
 from recognition.face_utils import (
     get_face_encodings, matches_face_encoding,
     annotate_frame, safe_load_dnn_model,
@@ -43,7 +43,7 @@ args = parser.parse_args()
 session = None
 try:
     session = Session.objects.get(id=args.session_id)
-    print(f"Loaded session: {session.subject} | Group: {session.class_group}")
+    print(f"Loaded session: {session.name} | Group: {session.class_group}")
 except Session.DoesNotExist:
     print(f"Session with id {args.session_id} not found.")
     exit(1)
@@ -176,9 +176,9 @@ def main():
                             print(f"[{time.strftime('%H:%M:%S')}] {name} ({distance:.3f})")
 
                             if name != "unknown":
-                                student = Student.objects.filter(full_name=name).first()
-                                if student and not AttendanceRecord.objects.filter(session=session, student=student).exists():
-                                    AttendanceRecord.objects.create(session=session, student=student)
+                                student = Person.objects.filter(full_name=name).first()
+                                if student and not AttendanceSummary.objects.filter(session=session, student=student).exists():
+                                    AttendanceSummary.objects.create(session=session, student=student)
                                     Event.objects.create(
                                         session=session,
                                         event_type='face_recognized',

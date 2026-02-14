@@ -11,9 +11,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
-from .models import Session, Student, Event, FaceEncoding, AttendanceRecord, UnidentifiedFace
-from .serializers import SessionSerializer, StudentSerializer, ClassGroupSerializer, EventSerializer
-from .models import ClassGroup
+from .models import Session, Person, Event, AttendanceSummary, UnidentifiedFace
+from .serializers import SessionSerializer, StudentSerializer, EventSerializer
 from .recognition_runner import run_recognition, active_recognition
 from django.utils import timezone
 
@@ -46,7 +45,7 @@ class SessionViewSet(viewsets.ModelViewSet):
 
         return Response({
             'id': session.id,
-            'subject': session.subject,
+            'subject': session.name,
             'status': session.status,
             'present_count': session.attendance_records.count(),
             'expected_count': session.class_group.students.count() if session.class_group else 0,
@@ -66,7 +65,7 @@ class SessionViewSet(viewsets.ModelViewSet):
     def present(self, request, pk=None):
         """Get all present students for a session"""
         session = self.get_object()
-        present_students = Student.objects.filter(
+        present_students = Person.objects.filter(
             attendance_entries__session=session
         ).distinct()
         serializer = StudentSerializer(present_students, many=True)
@@ -83,7 +82,7 @@ class SessionViewSet(viewsets.ModelViewSet):
         all_students = session.class_group.students.all()
         # Get students who attended
         present_ids = set(
-            Student.objects.filter(
+            Person.objects.filter(
                 attendance_entries__session=session
             ).values_list('id', flat=True)
         )
@@ -96,7 +95,7 @@ class SessionViewSet(viewsets.ModelViewSet):
     def progress(self, request, pk=None):
         """Get attendance progress for a session"""
         session = self.get_object()
-        present_count = AttendanceRecord.objects.filter(session=session).count()
+        present_count = AttendanceSummary.objects.filter(session=session).count()
         expected_count = session.class_group.students.count() if session.class_group else 0
         unidentified_count = session.unidentified_faces.count()
         attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
@@ -192,23 +191,8 @@ class SessionViewSet(viewsets.ModelViewSet):
 
 
 class StudentViewSet(viewsets.ModelViewSet):
-    queryset = Student.objects.all()
+    queryset = Person.objects.all()
     serializer_class = StudentSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [CsrfExemptSessionAuthentication]
 
-
-class ClassGroupViewSet(viewsets.ModelViewSet):
-    """API endpoint to manage ClassGroups"""
-    queryset = ClassGroup.objects.all()
-    serializer_class = ClassGroupSerializer
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [CsrfExemptSessionAuthentication]
-
-    def perform_create(self, serializer):
-        # allow creating with optional student list
-        students = serializer.validated_data.pop('students', None)
-        group = serializer.save()
-        if students:
-            group.students.set(students)
-            group.save()

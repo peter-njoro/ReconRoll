@@ -79,6 +79,8 @@ fi
 echo "PostgreSQL is reachable, proceeding with initialization..."
 
 echo "Running Django management commands..."
+echo "Making migrations"
+python manage.py makemigrations
 
 echo "Applying migrations..."
 python manage.py migrate --noinput

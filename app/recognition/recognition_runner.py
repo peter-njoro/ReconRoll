@@ -27,7 +27,7 @@ sys.path.append(BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from recognition.models import Session, Student, AttendanceRecord, UnidentifiedFace, Event
+from recognition.models import Session, Person, AttendanceSummary, UnidentifiedFace, Event
 from recognition.face_utils import (
     get_face_encodings, matches_face_encoding,
     save_unidentified_faces, load_known_encodings_from_db,
@@ -157,9 +157,9 @@ def run_recognition_from_queue(session_id, stop_flag):
                     print(f"[INFO] Detected: {name} | Distance: {distance:.4f}")
 
                     if is_known and name != "unknown":
-                        student = Student.objects.filter(full_name=name).first()
+                        student = Person.objects.filter(full_name=name).first()
                         if student:
-                            record, created = AttendanceRecord.objects.get_or_create(session=session, student=student)
+                            record, created = AttendanceSummary.objects.get_or_create(session=session, student=student)
                             if created:
                                 recognized_count += 1
                                 Event.objects.create(
@@ -172,7 +172,7 @@ def run_recognition_from_queue(session_id, stop_flag):
                                 print(f"✓ Attendance marked for {student.full_name} ({recognized_count} total)")
 
                     else:
-                        if idx == -1:  # brand new unknown
+                        if idx == -1:
                             cropped_path, full_path, saved_encoding = save_unidentified_faces(
                                 frame_copy, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
                             )

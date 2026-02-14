@@ -1,11 +1,11 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import CustomUser
+from .models import User
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
-        model = CustomUser
+        model = User
         fields = ['id', 'username', 'email', 'full_name', 'is_student', 'is_teacher']
         read_only_fields = ['id']
 
@@ -15,7 +15,7 @@ class SignupSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
-        model = CustomUser
+        model = User
         fields = ['username', 'email', 'full_name', 'is_student', 'is_teacher', 'password', 'password2']
 
     def validate(self, attrs):
@@ -26,7 +26,7 @@ class SignupSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
-        user = CustomUser(**validated_data)
+        user = User(**validated_data)
         user.set_password(password)
         user.save()
         return user

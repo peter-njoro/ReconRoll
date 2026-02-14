@@ -22,7 +22,7 @@ from recognition.face_utils import (
     load_known_encodings_from_db,
     matches_face_encoding
 )
-from recognition.models import FaceEncoding, Session, AttendanceRecord, Event, Student
+from recognition.models import FaceEncoding, Session, AttendanceSummary, Event, Person
 from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
 import time
 
@@ -394,10 +394,10 @@ def create_session_view(request):
 
             return JsonResponse({
                 'status': 'success',
-                'message': f"Session '{session.subject}' created successfully!",
+                'message': f"Session '{session.name}' created successfully!",
                 'session': {
                     'id': str(session.id),
-                    'subject': session.subject,
+                    'subject': session.name,
                     'class_group': str(session.class_group.id) if session.class_group else None,
                     'status': session.status,
                     'created_at': session.created_at.isoformat() if session.created_at else None
@@ -431,12 +431,12 @@ def sessions_list(request):
 
         # Per-session counts for attendance summary
         expected_count = session.class_group.students.count() if session.class_group else 0
-        present_count = AttendanceRecord.objects.filter(session=session).count()
+        present_count = AttendanceSummary.objects.filter(session=session).count()
         attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
 
         sessions_data.append({
             'id': session.id,
-            'subject': session.subject,
+            'subject': session.name,
             'class_group': session.class_group.name if session.class_group else None,
             'status': session.status,
             'created_at': isoformat_or_none(session.created_at),
@@ -481,9 +481,9 @@ def session_detail(request, session_id):
     """Get detailed information about a session"""
     session = get_object_or_404(Session, id=session_id)
     
-    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
-    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
-    present_students = [record.student for record in present_records]
+    expected_students = session.class_group.students.all() if session.class_group else Person.objects.none()
+    present_records = AttendanceSummary.objects.filter(session=session).select_related('person')
+    present_students = [record.person for record in present_records]
     absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
 
     # Load events for this session to include in the response
@@ -493,7 +493,7 @@ def session_detail(request, session_id):
         'status': 'ok',
         'session': {
             'id': session.id,
-            'subject': session.subject,
+            'subject': session.name,
             'class_group': session.class_group.id if session.class_group else None,
             'status': session.status,
             'created_at': isoformat_or_none(session.created_at),
@@ -556,7 +556,7 @@ def start_session_view(request, session_id):
         if existing.get("thread") and existing["thread"].is_alive():
             return JsonResponse({
                 'status': 'error',
-                'message': f'Recognition is already running for session: {session.subject}'
+                'message': f'Recognition is already running for session: {session.name}'
             }, status=400)
 
     # ------------------------------------------------------------------
@@ -631,7 +631,7 @@ def start_session_view(request, session_id):
         return JsonResponse({
             'status': 'started',
             'session_id': str(session_id),
-            'subject': session.subject,
+            'subject': session.name,
             'mode': 'dev' if dev_mode else 'prod',
             'message': f"Recognition started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
         })
@@ -682,17 +682,17 @@ def end_session_view(request, session_id):
                 session=session,
                 event_type='session_ended',
                 severity='info',
-                message=f"Session '{session.subject}' ended via traditional view"
+                message=f"Session '{session.name}' ended via traditional view"
             )
         except Exception:
             pass
 
         return JsonResponse({
             'status': 'success',
-            'message': f"Session '{session.subject}' ended successfully",
+            'message': f"Session '{session.name}' ended successfully",
             'session': {
                 'id': str(session.id),
-                'subject': session.subject,
+                'subject': session.name,
                 'status': session.status,
                 'ended_at': isoformat_or_none(session.end_time)
             }
@@ -700,10 +700,10 @@ def end_session_view(request, session_id):
     else:
         return JsonResponse({
             'status': 'info',
-            'message': f"Session '{session.subject}' was already ended",
+            'message': f"Session '{session.name}' was already ended",
             'session': {
                 'id': str(session.id),
-                'subject': session.subject,
+                'subject': session.name,
                 'status': session.status,
                 'ended_at': isoformat_or_none(session.end_time)
             }
@@ -758,7 +758,7 @@ def stop_all_sessions_view(request):
 
                 stopped_sessions.append({
                     'id': str(session.id),
-                    'subject': session.subject
+                    'subject': session.name
                 })
                 stopped_count += 1
 
@@ -804,7 +804,7 @@ def update_session_view(request, session_id):
         updated_fields = []
 
         if 'subject' in data:
-            session.subject = data['subject']
+            session.name = data['subject']
             updated_fields.append('subject')
 
         if 'class_group' in data:
@@ -867,7 +867,7 @@ def update_session_view(request, session_id):
                 'updated_fields': updated_fields,
                 'session': {
                     'id': str(session.id),
-                    'subject': session.subject,
+                    'subject': session.name,
                     'class_group': str(session.class_group.id) if session.class_group else None,
                     'class_group_name': session.class_group.name if session.class_group else None,
                     'status': session.status,
@@ -882,7 +882,7 @@ def update_session_view(request, session_id):
                 'message': 'No fields to update',
                 'session': {
                     'id': str(session.id),
-                    'subject': session.subject,
+                    'subject': session.name,
                     'status': session.status,
                 }
             })
@@ -920,8 +920,8 @@ def session_events_partial(request, session_id):
 def session_present_students_partial(request, session_id):
     """Get present students for a session"""
     session = get_object_or_404(Session, id=session_id)
-    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
-    present_students = [r.student for r in present_records]
+    present_records = AttendanceSummary.objects.filter(session=session).select_related('person')
+    present_students = [r.person for r in present_records]
     
     return JsonResponse({
         'status': 'ok',
@@ -940,9 +940,9 @@ def session_present_students_partial(request, session_id):
 def session_absent_students_partial(request, session_id):
     """Get absent students for a session"""
     session = get_object_or_404(Session, id=session_id)
-    expected_students = session.class_group.students.all() if session.class_group else Student.objects.none()
-    present_records = AttendanceRecord.objects.filter(session=session).select_related('student')
-    present_students = [r.student for r in present_records]
+    expected_students = session.class_group.students.all() if session.class_group else Person.objects.none()
+    present_records = AttendanceSummary.objects.filter(session=session).select_related('person')
+    present_students = [r.person for r in present_records]
     absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
     
     return JsonResponse({
@@ -1023,7 +1023,7 @@ def recognition_progress_partial(request, session_id):
     """Get real-time recognition progress for a session"""
     session = get_object_or_404(Session, id=session_id)
     total_expected = session.class_group.students.count() if session.class_group else 0
-    present_count = AttendanceRecord.objects.filter(session=session).count()
+    present_count = AttendanceSummary.objects.filter(session=session).count()
     
     # Import UnidentifiedFace here to avoid NameError when the model is not in global scope
     try:

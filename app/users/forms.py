@@ -1,10 +1,10 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import CustomUser
+from .models import User
 
 class CustomUserCreationForm(UserCreationForm):
     class Meta:
-        model = CustomUser
+        model = User
         fields = ('username', 'email', 'full_name', 'is_student', 'is_teacher')
         help_texts = {
             'username': None,

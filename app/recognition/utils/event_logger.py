@@ -1,6 +1,6 @@
 import logging 
 from django.utils.timezone import now
-from recognition.models import Event, Session, AttendanceRecord
+from recognition.models import Event, Session, AttendanceSummary
 
 logger  = logging.getLogger("recognition")
 
@@ -41,18 +41,18 @@ def record_event_or_log(
 
     # If it's an attendance event, auto-link it
     if event_type == 'attendance_marked':
-        from recognition.models import Student
+        from recognition.models import Person
 
         face_id = metadata.get("face_id") or metadata.get("student_id")
         if face_id:
             try:
-                student = Student.objects.get(id=face_id)
-                AttendanceRecord.objects.create(
+                student = Person.objects.get(id=face_id)
+                AttendanceSummary.objects.create(
                     session=session,
                     student=student,
                     timestamp=now(),
                     source_event=event
                 )
-            except Student.DoesNotExist:
+            except Person.DoesNotExist:
                 logger.error(f"Attempted to mark attendance for unkown face ID: {face_id}")
                 

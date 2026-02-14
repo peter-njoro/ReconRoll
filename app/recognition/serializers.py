@@ -1,12 +1,12 @@
 from rest_framework import serializers
-from .models import Session, Student, AttendanceRecord, Event, ClassGroup
+from .models import Session, Person, AttendanceSummary, Event
 
 
 class StudentSerializer(serializers.ModelSerializer):
     class_groups = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
     class Meta:
-        model = Student
+        model = Person
         fields = ['id', 'full_name', 'registration_number', 'email', 'course', 'year_of_study', 'class_groups']
 
 
@@ -18,7 +18,7 @@ class SessionSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Session
-        fields = ['id', 'subject', 'class_group', 'class_group_name', 'status', 'created_by', 'created_at', 'start_time', 'end_time', 'notes', 'recognition']
+        fields = ['id', 'name', 'class_group', 'class_group_name', 'status', 'created_by', 'created_at', 'start_time', 'end_time', 'notes', 'recognition']
         read_only_fields = ['id', 'created_by', 'created_at', 'start_time', 'recognition', 'status', 'end_time']
 
     def get_recognition(self, obj):
@@ -28,7 +28,7 @@ class SessionSerializer(serializers.ModelSerializer):
         active_data = active_recognition.get(str(obj.id), {})
         is_running = active_data.get("thread") and active_data["thread"].is_alive()
         
-        present_count = AttendanceRecord.objects.filter(session=obj).count()
+        present_count = AttendanceSummary.objects.filter(session=obj).count()
         expected_count = obj.class_group.students.count() if obj.class_group else 0
         attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
         
@@ -44,8 +44,6 @@ class SessionSerializer(serializers.ModelSerializer):
         # Handle optional class_group_name coming from frontend
         class_group_name = validated_data.pop('class_group_name', None)
         class_group_obj = None
-        if class_group_name:
-            class_group_obj, _ = ClassGroup.objects.get_or_create(name=class_group_name)
 
         session = super().create(validated_data)
         if class_group_obj:
@@ -54,11 +52,6 @@ class SessionSerializer(serializers.ModelSerializer):
         return session
 
     def update(self, instance, validated_data):
-        # allow updating via class_group_name as well
-        class_group_name = validated_data.pop('class_group_name', None)
-        if class_group_name is not None:
-            class_group_obj, _ = ClassGroup.objects.get_or_create(name=class_group_name)
-            instance.class_group = class_group_obj
         return super().update(instance, validated_data)
     
     def validate_class_group_name(self, value):
@@ -74,11 +67,4 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = ['id', 'event_type', 'message', 'timestamp', 'severity']
 
-
-class ClassGroupSerializer(serializers.ModelSerializer):
-    students = serializers.PrimaryKeyRelatedField(queryset=Student.objects.all(), many=True, required=False)
-
-    class Meta:
-        model = ClassGroup
-        fields = ['id', 'name', 'description', 'students', 'created_at']
 

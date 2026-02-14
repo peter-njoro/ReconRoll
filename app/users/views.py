@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.authentication import SessionAuthentication
 from django.contrib.auth import login, logout
 from .serializers import CustomUserSerializer, SignupSerializer, LoginSerializer
-from .models import CustomUser
+from .models import User
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -20,7 +20,7 @@ class UserViewSet(viewsets.ModelViewSet):
     API endpoints for user authentication and profile management.
     Replaces template-based views with JSON API responses for React frontend.
     """
-    queryset = CustomUser.objects.all()
+    queryset = User.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [CsrfExemptSessionAuthentication]
@@ -30,7 +30,7 @@ class UserViewSet(viewsets.ModelViewSet):
         """Register a new user."""
         serializer = SignupSerializer(data=request.data)
         if serializer.is_valid():
-            user: CustomUser = serializer.save()
+            user: User = serializer.save()
             login(request, user)
             return Response(
                 {

@@ -3,7 +3,7 @@ import cv2
 import uuid
 import numpy as np
 import face_recognition
-from recognition.models import Student, UnidentifiedFace
+from recognition.models import Person, UnidentifiedFace
 from django.conf import settings
 from collections import defaultdict, deque
 
@@ -27,14 +27,14 @@ def load_known_encodings_from_db(session=None):
         students = session.class_group.students.all().prefetch_related('encodings')
         scope_info = f"class group '{session.class_group.name}'"
     else:
-        students = Student.objects.all().prefetch_related('encodings')
+        students = Person.objects.all().prefetch_related('encodings')
         scope_info = "all students (no session filter)"
     
     print(f"[INFO] Loading face encodings for {scope_info} ({students.count()} students)")
 
     for student in students:
         for encoding_obj in student.encodings.all():
-            path = os.path.join(settings.BASE_DIR, encoding_obj.file_path)
+            path = os.path.join(settings.BASE_DIR, encoding_obj.image_path)
             try:
                 encoding = np.load(path)
                 known_encodings.append(encoding)

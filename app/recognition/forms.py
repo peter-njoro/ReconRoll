@@ -1,57 +1,48 @@
 from django import forms
-from .models import Student, Session, ClassGroup
-
+from .models import Person, Session
 
 class StudentForm(forms.ModelForm):
     class Meta:
-        model = Student
-        fields = ['full_name', 'registration_number', 'email', 'course', 'year_of_study']
+        model = Person
+        fields = [
+            'first_name',
+            'last_name',
+            'email',
+            'phone',
+            'identification_number',
+            'date_of_birth',
+            'status',
+            'notes'
+        ]
         widgets = {
-            'full_name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Full Name'
-            }),
-            'registration_number': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Registration Number'
-            }),
-            'email': forms.EmailInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Email Address'
-            }),
-            'course': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Course'
-            }),
-            'year_of_study': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Year of Study',
-                'min': 1
-            }),
-        }
-        labels = {
-            'full_name': 'Full Name',
-            'registration_number': 'Registration Number',
-            'email': 'Email',
-            'course': 'Course',
-            'year_of_study': 'Year of Study',
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'identification_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'date_of_birth': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
 class SessionForm(forms.ModelForm):
     class Meta:
         model = Session
-        fields = ['subject', 'class_group', 'notes']
+        fields = [
+            'name',
+            'description',
+            'session_type',
+            'start_time',
+            'end_time',
+            'expected_count',
+            'status'
+        ]
         widgets = {
-            'subject': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Session Subject'
-            }),
-            'class_group': forms.Select(attrs={
-                'class': 'form-control',
-            }),
-            'notes': forms.Textarea(attrs={
-                'class': 'form-control',
-                'placeholder': 'Additional Notes',
-                'rows': 3
-            }),
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'session_type': forms.TextInput(attrs={'class': 'form-control'}),
+            'start_time': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'end_time': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'expected_count': forms.NumberInput(attrs={'class': 'form-control'}),
+            'status': forms.Select(attrs={'class': 'form-control'}),
         }
