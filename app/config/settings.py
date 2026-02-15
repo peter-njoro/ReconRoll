@@ -26,12 +26,11 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost 127.0.0.1 [::1]").spl
 # Application definition
 
 INSTALLED_APPS = [
-    # my apps
-    'recognition',
-    'users',
     #django apps
     'django.contrib.admin',
     'django.contrib.auth',
+    # my users app
+    'users',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
@@ -41,6 +40,8 @@ INSTALLED_APPS = [
     'django_htmx',
     'rest_framework',
     'corsheaders',
+    # my apps
+    'recognition',
 ]
 
 MIDDLEWARE = [
