@@ -12,9 +12,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
 from .models import Session, Person, Event, AttendanceSummary, UnidentifiedFace
-from .serializers import SessionSerializer, StudentSerializer, EventSerializer
-from .recognition_runner import run_recognition, active_recognition
-from django.utils import timezone
+from .serializers import SessionSerializer, PersonSerializer, EventSerializer
+from .recognition_runner import active_recognition, frame_queue
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -23,6 +22,20 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
     def enforce_csrf(self, request):
         # Override DRF's CSRF enforcement to skip CSRF checks for API clients
         return None
+
+
+def get_expected_count(session):
+    expected_people = session.expected_persons.count()
+    if expected_people > 0:
+        return expected_people
+    return session.expected_count or 0
+
+
+def get_present_records(session):
+    return AttendanceSummary.objects.filter(
+        session=session,
+        status__in=['present', 'late']
+    )
 
 
 class SessionViewSet(viewsets.ModelViewSet):
@@ -39,16 +52,16 @@ class SessionViewSet(viewsets.ModelViewSet):
     def status(self, request, pk=None):
         """Get current status of a session"""
         session = self.get_object()
-        is_running = str(pk) in active_recognition and active_recognition[str(pk)].get('thread',
-                                                                                       {}).is_alive() if hasattr(
-            active_recognition[str(pk)].get('thread', {}), 'is_alive') else False
+        active_data = active_recognition.get(str(pk), {})
+        thread = active_data.get('thread')
+        is_running = bool(thread and thread.is_alive())
 
         return Response({
             'id': session.id,
-            'subject': session.name,
+            'name': session.name,
             'status': session.status,
-            'present_count': session.attendance_records.count(),
-            'expected_count': session.class_group.students.count() if session.class_group else 0,
+            'present_count': get_present_records(session).count(),
+            'expected_count': get_expected_count(session),
             'unknown_count': session.unidentified_faces.count(),
             'is_running': is_running
         })
@@ -63,40 +76,38 @@ class SessionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def present(self, request, pk=None):
-        """Get all present students for a session"""
+        """Get all present people for a session"""
         session = self.get_object()
-        present_students = Person.objects.filter(
-            attendance_entries__session=session
+        present_people = Person.objects.filter(
+            attendance_records__session=session,
+            attendance_records__status__in=['present', 'late']
         ).distinct()
-        serializer = StudentSerializer(present_students, many=True)
+        serializer = PersonSerializer(present_people, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def absent(self, request, pk=None):
-        """Get all absent students for a session"""
+        """Get all absent people for a session"""
         session = self.get_object()
-        if not session.class_group:
+        expected_people = Person.objects.filter(
+            expected_sessions__session=session
+        ).distinct()
+        if not expected_people.exists():
             return Response([])
 
-        # Get all students in the class group
-        all_students = session.class_group.students.all()
-        # Get students who attended
         present_ids = set(
-            Person.objects.filter(
-                attendance_entries__session=session
-            ).values_list('id', flat=True)
+            get_present_records(session).values_list('person_id', flat=True)
         )
-        # Absent = all students - present students
-        absent_students = all_students.exclude(id__in=present_ids)
-        serializer = StudentSerializer(absent_students, many=True)
+        absent_people = expected_people.exclude(id__in=present_ids)
+        serializer = PersonSerializer(absent_people, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def progress(self, request, pk=None):
         """Get attendance progress for a session"""
         session = self.get_object()
-        present_count = AttendanceSummary.objects.filter(session=session).count()
-        expected_count = session.class_group.students.count() if session.class_group else 0
+        present_count = get_present_records(session).count()
+        expected_count = get_expected_count(session)
         unidentified_count = session.unidentified_faces.count()
         attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
 
@@ -138,7 +149,7 @@ class SessionViewSet(viewsets.ModelViewSet):
         session = self.get_object()
 
         # Check if session is running
-        if session.status != 'ongoing':
+        if session.status != 'in_progress':
             return Response(
                 {'error': 'Session is not running. Start the session first.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -190,9 +201,12 @@ class SessionViewSet(viewsets.ModelViewSet):
             )
 
 
-class StudentViewSet(viewsets.ModelViewSet):
+class PersonViewSet(viewsets.ModelViewSet):
     queryset = Person.objects.all()
-    serializer_class = StudentSerializer
+    serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [CsrfExemptSessionAuthentication]
 
+
+# Backwards compatibility
+StudentViewSet = PersonViewSet

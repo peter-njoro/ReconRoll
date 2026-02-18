@@ -65,14 +65,38 @@ class UserViewSet(viewsets.ModelViewSet):
         logout(request)
         return Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def set_username(self, request):
+        """Set or update the authenticated user's username."""
+        username = (request.data.get('username') or '').strip()
+        if not username:
+            return Response({'username': 'Username is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username__iexact=username).exclude(id=request.user.id).exists():
+            return Response({'username': 'Username is already in use.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        request.user.username = username
+        request.user.save(update_fields=['username', 'updated_at'])
+        return Response(
+            {
+                'user': CustomUserSerializer(request.user).data,
+                'message': 'Username updated successfully'
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated])
+    def delete_account(self, request):
+        """Delete the authenticated user's account."""
+        user = request.user
+        logout(request)
+        user.delete()
+        return Response({'message': 'Account deleted successfully'}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def me(self, request):
         """Get current user profile."""
         user = request.user
         if user.is_authenticated:
             return Response(CustomUserSerializer(user).data)
-        return Response(
-            {'detail': 'Not authenticated'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-
+        return Response(None, status=status.HTTP_401_UNAUTHORIZED)

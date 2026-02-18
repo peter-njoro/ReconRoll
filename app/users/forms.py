@@ -5,13 +5,12 @@ from .models import User
 class CustomUserCreationForm(UserCreationForm):
     class Meta:
         model = User
-        fields = ('username', 'email', 'full_name', 'is_student', 'is_teacher')
+        fields = ('email', 'username', 'first_name', 'last_name')
         help_texts = {
-            'username': None,
             'email': None,
-            'full_name': None,
-            'is_student': 'Are you a Student?',
-            'is_teacher': 'Are you a teacher?',
+            'username': None,
+            'first_name': None,
+            'last_name': None,
         }
 
     # Override the password fields to remove Django's annoying help texts

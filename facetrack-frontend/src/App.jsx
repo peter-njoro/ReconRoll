@@ -1,4 +1,3 @@
-import './styles.css';
 import './App.css';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -11,9 +10,11 @@ import { EnrollmentForm } from './components/EnrollmentForm';
 import { Login } from './pages/LoginPage';
 import { Signup } from './pages/SignupPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SetUsernamePage } from './pages/SetUsernamePage';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const displayName = user?.username || user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email;
   
   const handleLogout = async () => {
     await logout();
@@ -33,7 +34,9 @@ const Navbar = () => {
           {user ? (
             <>
               <li className="nav-item">
-                <span className="navbar-text"><a className="nav-link" href="/profile">Hello, {user.username}.</a></span>
+                <span className="navbar-text">
+                  <a className="nav-link" href="/profile">Hello, {displayName}.</a>
+                </span>
               </li>
               <li className="nav-item">
                 <button className="nav-link btn btn-link" onClick={handleLogout}>
@@ -66,6 +69,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/username"
+          element={
+            <ProtectedRoute>
+              <SetUsernamePage />
             </ProtectedRoute>
           }
         />

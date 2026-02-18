@@ -17,6 +17,7 @@ urlpatterns = [
     path('sessions/', views.sessions_list, name='sessions_list'),
     path('sessions/stop-all/', views.stop_all_sessions_view, name='stop_all_sessions'),
     path('session/<uuid:session_id>/', views.session_detail, name='session_detail'),
+    path('session/<uuid:session_id>/expected/', views.session_expected_people_view, name='session_expected_people'),
     path('session/<uuid:session_id>/start/', views.start_session_view, name='start_session'),
     path('session/<uuid:session_id>/stop/', views.end_session_view, name='end_session'),
     path('session/<uuid:session_id>/update/', views.update_session_view, name='update_session'),
@@ -25,8 +26,8 @@ urlpatterns = [
     
     # Partial views
     path('session/<uuid:session_id>/events_partial/', views.session_events_partial, name='session_events_partial'),
-    path('session/<uuid:session_id>/present_partial/', views.session_present_students_partial, name='session_present_partial'),
-    path('session/<uuid:session_id>/absent_partial/', views.session_absent_students_partial, name='session_absent_partial'),
+    path('session/<uuid:session_id>/present_partial/', views.session_present_people_partial, name='session_present_partial'),
+    path('session/<uuid:session_id>/absent_partial/', views.session_absent_people_partial, name='session_absent_partial'),
     path('session/<uuid:session_id>/unidentified_partial/', views.session_unidentified_faces_partial, name='session_unidentified_partial'),
     path('session/<uuid:session_id>/progress_partial/', views.recognition_progress_partial, name='recognition_progress_partial'),
 

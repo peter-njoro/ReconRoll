@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const Login = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,10 +16,12 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      await login(username, password);
+      await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please try again.');
+      const apiError = err.response?.data;
+      const message = apiError?.detail || apiError?.non_field_errors?.[0] || 'Login failed. Please try again.';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -27,75 +29,56 @@ export const Login = () => {
 
   return (
     <div className="auth-page">
-      <div className="container-lg">
-        <div className="auth-container">
-          <div className="auth-card">
-            <div className="auth-header">
-              <div className="auth-icon">
-                <i className="bi bi-lock"></i>
-              </div>
-              <h2 className="auth-title">Welcome Back</h2>
-              <p className="auth-subtitle">Sign in to your account</p>
-            </div>
+      <div className="auth-card">
+        <div className="auth-header">
+          <p className="auth-eyebrow">Welcome back</p>
+          <h1 className="auth-title">Sign in</h1>
+          <p className="auth-subtitle">Use your email and password to continue.</p>
+        </div>
 
-            {error && (
-              <div className="alert-custom alert-danger">
-                <i className="bi bi-exclamation-circle"></i>
-                <span>{error}</span>
-              </div>
-            )}
+        {error && (
+          <div className="alert error">{error}</div>
+        )}
 
-            <form onSubmit={handleSubmit} className="auth-form">
-              <div className="form-group">
-                <label htmlFor="username">Username</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-person"></i>
-                  <input
-                    type="text"
-                    id="username"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+        <form onSubmit={handleSubmit} className="auth-form">
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              id="email"
+              placeholder="name@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+          </label>
 
-              <div className="form-group">
-                <label htmlFor="password">Password</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-key"></i>
-                  <input
-                    type="password"
-                    id="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              id="password"
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
 
-              <button
-                type="submit"
-                className="btn-submit"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Signing In...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </button>
-            </form>
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={loading}
+          >
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
+        </form>
 
-            <div className="auth-footer">
-              <p>Don't have an account? <a href="/signup">Create one</a></p>
-            </div>
-          </div>
+        <div className="auth-footer">
+          <span>New here?</span>
+          <Link to="/signup">Create an account</Link>
         </div>
       </div>
     </div>

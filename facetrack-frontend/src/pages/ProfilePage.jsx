@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const ProfilePage = () => {
@@ -40,6 +40,9 @@ export const ProfilePage = () => {
     );
   }
 
+  const fullName = user.full_name || [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Not provided';
+  const username = user.username || 'Not set';
+
   return (
     <div className="profile-page">
       <div className="container-lg">
@@ -48,11 +51,11 @@ export const ProfilePage = () => {
             <div className="profile-avatar">
               <i className="bi bi-person-circle"></i>
             </div>
-            <h1 className="profile-name">{user.username}</h1>
+            <h1 className="profile-name">{fullName}</h1>
             <div className="profile-roles">
-              {user.is_student && <span className="role-badge student">Student</span>}
-              {user.is_teacher && <span className="role-badge teacher">Teacher</span>}
-              {!user.is_student && !user.is_teacher && <span className="role-badge neutral">User</span>}
+              <span className={`role-badge ${user.is_verified ? 'verified' : 'unverified'}`}>
+                {user.is_verified ? 'Verified' : 'Unverified'}
+              </span>
             </div>
           </div>
 
@@ -60,9 +63,17 @@ export const ProfilePage = () => {
             <div className="info-item">
               <label className="info-label">
                 <i className="bi bi-person"></i>
+                Name
+              </label>
+              <p className="info-value">{fullName}</p>
+            </div>
+
+            <div className="info-item">
+              <label className="info-label">
+                <i className="bi bi-at"></i>
                 Username
               </label>
-              <p className="info-value">{user.username}</p>
+              <p className="info-value">{username}</p>
             </div>
 
             <div className="info-item">
@@ -75,20 +86,22 @@ export const ProfilePage = () => {
 
             <div className="info-item">
               <label className="info-label">
-                <i className="bi bi-card-text"></i>
-                Full Name
+                <i className="bi bi-shield-check"></i>
+                Status
               </label>
-              <p className="info-value">{user.full_name || 'Not provided'}</p>
+              <p className="info-value">{user.is_active ? 'Active' : 'Inactive'}</p>
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="btn-logout"
-          >
-            <i className="bi bi-box-arrow-right"></i>
-            Logout
-          </button>
+          <div className="profile-actions">
+            <Link to="/profile/username" className="btn-secondary-outline">
+              Set username
+            </Link>
+            <button onClick={handleLogout} className="btn-logout">
+              <i className="bi bi-box-arrow-right"></i>
+              Logout
+            </button>
+          </div>
         </div>
       </div>
     </div>

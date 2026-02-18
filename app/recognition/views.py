@@ -1,7 +1,9 @@
 import os
 import cv2
+import io
 import uuid
 import json
+import hashlib
 import threading
 import numpy as np
 import face_recognition
@@ -10,19 +12,26 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from recognition.forms import StudentForm, SessionForm
+from recognition.forms import PersonForm, SessionForm
 from recognition.face_utils import (
     get_face_encodings, 
-    annotate_frame, 
-    load_known_encodings_from_db,
     matches_face_encoding
 )
-from recognition.models import FaceEncoding, Session, AttendanceSummary, Event, Person
+from recognition.models import (
+    FaceEncoding,
+    Session,
+    SessionExpectedPerson,
+    AttendanceSummary,
+    Event,
+    Person,
+    UnidentifiedFace,
+)
 from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
 import time
 
@@ -48,13 +57,84 @@ def isoformat_or_none(dt):
     """Helper function to convert datetime to ISO format or return None"""
     return dt.isoformat() if dt is not None else None
 
+
+def split_full_name(full_name):
+    parts = full_name.strip().split()
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+def get_present_records(session):
+    return AttendanceSummary.objects.filter(
+        session=session,
+        status__in=['present', 'late']
+    )
+
+
+def get_expected_count(session):
+    expected_links = session.expected_persons.count()
+    if expected_links > 0:
+        return expected_links
+    return session.expected_count or 0
+
+
+def decode_face_encoding(encoding_obj):
+    if encoding_obj.encoding:
+        try:
+            return np.load(io.BytesIO(encoding_obj.encoding), allow_pickle=False)
+        except Exception:
+            pass
+
+    if encoding_obj.image_path:
+        for base_dir in (settings.MEDIA_ROOT, settings.BASE_DIR):
+            candidate = os.path.join(str(base_dir), encoding_obj.image_path)
+            if os.path.exists(candidate):
+                try:
+                    return np.load(candidate, allow_pickle=False)
+                except Exception:
+                    pass
+
+    return None
+
+
+def load_known_encodings(session=None):
+    """
+    Load known face encodings from the database.
+
+    If a session is provided, scope to expected people when possible.
+    """
+    known_encodings = []
+    known_names = []
+
+    if session:
+        people = Person.objects.filter(
+            expected_sessions__session=session
+        ).prefetch_related('face_encodings')
+        if not people.exists():
+            people = Person.objects.all().prefetch_related('face_encodings')
+    else:
+        people = Person.objects.all().prefetch_related('face_encodings')
+
+    for person in people:
+        for encoding_obj in person.face_encodings.all():
+            encoding = decode_face_encoding(encoding_obj)
+            if encoding is None:
+                continue
+            known_encodings.append(encoding)
+            known_names.append(person.get_full_name())
+
+    return np.array(known_encodings) if known_encodings else np.array([]), known_names
+
 def get_cached_known_encodings(session=None, force_reload=False):
     """
     Get known face encodings from cache, reload from DB if expired.
     This avoids database queries on every frame upload.
     
     Args:
-        session: Session object (optional). If provided, scopes encodings to class group.
+        session: Session object (optional). If provided, scopes encodings to expected people.
         force_reload: Force cache refresh
     
     Returns:
@@ -70,8 +150,8 @@ def get_cached_known_encodings(session=None, force_reload=False):
     if cached is not None:
         return cached
     
-    # Cache miss: reload from database using face_utils function
-    known_encodings, known_names = load_known_encodings_from_db(session=session)
+    # Cache miss: reload from database
+    known_encodings, known_names = load_known_encodings(session=session)
     
     result = {
         'encodings': known_encodings,
@@ -222,7 +302,7 @@ def index(request):
     """Home page info endpoint"""
     return Response({
         'title': 'FaceTrack Lite API',
-        'message': 'Welcome to FaceTrack Lite: finally, a tool that stares back at you harder than your laptop\'s front camera during an online exam 👁️👁️. Don\'t worry, we only judge a little.',
+        'message': 'Welcome to FaceTrack Lite: a system that recognizes faces and keeps sessions organized.',
         'version': '2.0',
         'endpoints': {
             'enroll': '/api/enroll/',
@@ -232,7 +312,7 @@ def index(request):
 
 @csrf_exempt
 def enroll_view(request):
-    """Enroll a new student with face images"""
+    """Enroll a new person with face images"""
     if request.method == 'POST':
         # Handle both form field names and API field names for compatibility
         post_data = request.POST.copy()
@@ -240,12 +320,19 @@ def enroll_view(request):
         # Map 'name' to 'full_name' if present
         if 'name' in post_data and 'full_name' not in post_data:
             post_data['full_name'] = post_data.pop('name')
+
+        # Map 'full_name' to first/last name if present
+        if 'full_name' in post_data and ('first_name' not in post_data or 'last_name' not in post_data):
+            first_name, last_name = split_full_name(post_data.get('full_name', ''))
+            post_data.setdefault('first_name', first_name)
+            post_data.setdefault('last_name', last_name)
+            post_data.pop('full_name', None)
         
-        # Map 'student_id' to 'registration_number' if present
-        if 'student_id' in post_data and 'registration_number' not in post_data:
-            post_data['registration_number'] = post_data.pop('student_id')
+        # Map legacy identifiers to identification_number
+        if 'registration_number' in post_data and 'identification_number' not in post_data:
+            post_data['identification_number'] = post_data.pop('registration_number')
         
-        form = StudentForm(post_data, request.FILES)
+        form = PersonForm(post_data, request.FILES)
         face_images = request.FILES.getlist('face_images')
         progress_key = f"enroll_progress_{request.session.session_key}"
         cache.set(progress_key, 0, timeout=600)
@@ -288,34 +375,45 @@ def enroll_view(request):
                         form_errors.append(f"❌ {image.name}: Face does not match the first image. Make sure all images are of the same person.")
                         continue
 
-                valid_encodings.append((image.name, encodings[0]))
+                valid_encodings.append((image.name, encodings[0], img_bytes))
 
                 # Update progress in cache
                 cache.set(progress_key, int((idx + 1) / total * 100), timeout=600)
 
             # Only save the form if we have valid encodings AND no errors
             if valid_encodings and not form_errors:
-                student = form.save()
-                for image_name, encoding in valid_encodings:
-                    filename = f"{uuid.uuid4()}.npy"
-                    path = os.path.join('recognition/uploads/faces', filename)
-                    abs_path = os.path.join(settings.BASE_DIR, path)
-                    np.save(abs_path, encoding)
+                person = form.save()
+                for idx, (image_name, encoding, image_bytes) in enumerate(valid_encodings):
+                    ext = os.path.splitext(image_name)[1] or '.jpg'
+                    image_filename = f"{uuid.uuid4()}{ext}"
+                    relative_image_path = os.path.join('recognition', 'uploads', 'faces', image_filename)
+                    absolute_image_path = os.path.join(str(settings.MEDIA_ROOT), relative_image_path)
+                    os.makedirs(os.path.dirname(absolute_image_path), exist_ok=True)
+
+                    with open(absolute_image_path, 'wb') as image_file:
+                        image_file.write(image_bytes)
+
+                    encoding_buffer = io.BytesIO()
+                    np.save(encoding_buffer, encoding)
+                    encoding_bytes = encoding_buffer.getvalue()
+                    image_hash = hashlib.sha256(image_bytes).hexdigest()
 
                     FaceEncoding.objects.create(
-                        student=student,
-                        file_path=path,
-                        notes=f"Encoding from {image_name}"
+                        person=person,
+                        encoding=encoding_bytes,
+                        image_path=relative_image_path,
+                        image_hash=image_hash,
+                        is_primary=(idx == 0)
                     )
 
                 cache.set(progress_key, 100, timeout=600)
                 return JsonResponse({
                     'status': 'success',
-                    'message': f"Student '{student.full_name}' enrolled successfully with {len(valid_encodings)} encoding(s)",
-                    'student': {
-                        'id': student.id,
-                        'name': student.full_name,
-                        'student_id': student.registration_number,
+                    'message': f"Person '{person.get_full_name()}' enrolled successfully with {len(valid_encodings)} encoding(s)",
+                    'person': {
+                        'id': person.id,
+                        'name': person.get_full_name(),
+                        'identification_number': person.identification_number,
                         'encodings_count': len(valid_encodings)
                     }
                 }, status=201)
@@ -341,11 +439,14 @@ def enroll_view(request):
             'status': 'ok',
             'message': 'POST face images to this endpoint for enrollment',
             'required_fields': {
-                'full_name': 'string (required)',
-                'registration_number': 'string (required)',
+                'first_name': 'string (required)',
+                'last_name': 'string (required)',
+                'identification_number': 'string (required)',
                 'email': 'string (optional)',
-                'course': 'string (optional)',
-                'year_of_study': 'integer (optional, default: 1)',
+                'phone': 'string (optional)',
+                'date_of_birth': 'date (optional)',
+                'status': 'string (optional, default: active)',
+                'notes': 'string (optional)',
                 'face_images': 'multiple files (required, at least 1)'
             },
             'constraints': {
@@ -364,8 +465,8 @@ def enroll_success(request):
     """Deprecated - use API endpoint instead"""
     return JsonResponse({
         'status': 'deprecated',
-        'message': 'This endpoint is deprecated. Use POST /api/students/enroll/ instead.',
-        'alternative': '/api/students/'
+        'message': 'This endpoint is deprecated. Use POST /api/people/enroll/ instead.',
+        'alternative': '/api/people/'
     }, status=410)
 
 @login_required
@@ -385,11 +486,13 @@ def create_session_view(request):
                 'message': 'Request body is not valid JSON'
             }, status=400)
 
+        if 'subject' in data and 'name' not in data:
+            data['name'] = data.pop('subject')
+
         form = SessionForm(data)
         if form.is_valid():
             session = form.save(commit=False)
             session.created_by = request.user
-            session.status = 'ongoing'
             session.save()
 
             return JsonResponse({
@@ -397,10 +500,14 @@ def create_session_view(request):
                 'message': f"Session '{session.name}' created successfully!",
                 'session': {
                     'id': str(session.id),
-                    'subject': session.name,
-                    'class_group': str(session.class_group.id) if session.class_group else None,
+                    'name': session.name,
+                    'description': session.description,
+                    'session_type': session.session_type,
+                    'expected_count': get_expected_count(session),
                     'status': session.status,
-                    'created_at': session.created_at.isoformat() if session.created_at else None
+                    'created_at': isoformat_or_none(session.created_at),
+                    'start_time': isoformat_or_none(session.start_time),
+                    'end_time': isoformat_or_none(session.end_time)
                 }
             }, status=201)
         else:
@@ -415,8 +522,13 @@ def create_session_view(request):
             'status': 'ok',
             'message': 'POST JSON data to create a new session',
             'required_fields': {
-                'subject': 'string (required)',
-                'class_group': 'integer (optional)'
+                'name': 'string (required)',
+                'description': 'string (optional)',
+                'session_type': 'string (optional)',
+                'start_time': 'datetime (required)',
+                'end_time': 'datetime (optional)',
+                'expected_count': 'integer (optional)',
+                'status': 'scheduled | in_progress | completed | cancelled (optional)'
             }
         })
 
@@ -430,14 +542,15 @@ def sessions_list(request):
         is_running = active_data.get("thread") and active_data["thread"].is_alive()
 
         # Per-session counts for attendance summary
-        expected_count = session.class_group.students.count() if session.class_group else 0
-        present_count = AttendanceSummary.objects.filter(session=session).count()
+        expected_count = get_expected_count(session)
+        present_count = get_present_records(session).count()
         attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
 
         sessions_data.append({
             'id': session.id,
-            'subject': session.name,
-            'class_group': session.class_group.name if session.class_group else None,
+            'name': session.name,
+            'description': session.description,
+            'session_type': session.session_type,
             'status': session.status,
             'created_at': isoformat_or_none(session.created_at),
             'started_at': isoformat_or_none(session.start_time),
@@ -481,10 +594,15 @@ def session_detail(request, session_id):
     """Get detailed information about a session"""
     session = get_object_or_404(Session, id=session_id)
     
-    expected_students = session.class_group.students.all() if session.class_group else Person.objects.none()
-    present_records = AttendanceSummary.objects.filter(session=session).select_related('person')
-    present_students = [record.person for record in present_records]
-    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
+    expected_people = Person.objects.filter(
+        expected_sessions__session=session
+    )
+    present_records = get_present_records(session).select_related('person')
+    present_people = [record.person for record in present_records]
+    absent_people = expected_people.exclude(id__in=[p.id for p in present_people])
+    expected_count = get_expected_count(session)
+    present_count = len(present_people)
+    absent_count = max(expected_count - present_count, 0)
 
     # Load events for this session to include in the response
     events = Event.objects.filter(session=session).order_by('-timestamp')[:50]
@@ -493,34 +611,37 @@ def session_detail(request, session_id):
         'status': 'ok',
         'session': {
             'id': session.id,
-            'subject': session.name,
-            'class_group': session.class_group.id if session.class_group else None,
+            'name': session.name,
+            'description': session.description,
+            'session_type': session.session_type,
+            'expected_count': expected_count,
             'status': session.status,
             'created_at': isoformat_or_none(session.created_at),
             'started_at': isoformat_or_none(session.start_time),
             'ended_at': isoformat_or_none(session.end_time),
             'created_by': session.created_by.username if session.created_by else None
         },
-        'present_students': [
+        'present_people': [
             {
-                'student_id': student.id,
-                'name': student.full_name,
+                'id': person.id,
+                'name': person.get_full_name(),
+                'identification_number': person.identification_number
             }
-            for student in present_students
+            for person in present_people
         ],
-        'absent_students': [
+        'absent_people': [
             {
-                'id': student.id,
-                'name': student.full_name,
-                'student_id': student.id
+                'id': person.id,
+                'name': person.get_full_name(),
+                'identification_number': person.identification_number
             }
-            for student in absent_students
+            for person in absent_people
         ],
         'summary': {
-            'expected_count': expected_students.count(),
-            'present_count': len(present_students),
-            'absent_count': len(list(absent_students)),
-            'attendance_percentage': round((len(present_students) / expected_students.count() * 100), 2) if expected_students.count() > 0 else 0
+            'expected_count': expected_count,
+            'present_count': present_count,
+            'absent_count': absent_count,
+            'attendance_percentage': round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
         },
         'events': [
             {
@@ -531,6 +652,82 @@ def session_detail(request, session_id):
             }
             for event in events
         ]
+    })
+
+@require_http_methods(["GET", "POST", "DELETE"])
+def session_expected_people_view(request, session_id):
+    """Manage expected people for a session"""
+    session = get_object_or_404(Session, id=session_id)
+
+    if request.method == "GET":
+        expected_people = Person.objects.filter(expected_sessions__session=session)
+        return JsonResponse({
+            'status': 'ok',
+            'session_id': session_id,
+            'expected_people': [
+                {
+                    'id': person.id,
+                    'name': person.get_full_name(),
+                    'identification_number': person.identification_number
+                }
+                for person in expected_people
+            ],
+            'count': expected_people.count()
+        })
+
+    try:
+        data = json.loads(request.body or "{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Request body is not valid JSON'
+        }, status=400)
+
+    person_ids = data.get('person_ids', [])
+    if not isinstance(person_ids, list):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'person_ids must be a list'
+        }, status=400)
+
+    unique_ids = list(dict.fromkeys(person_ids))
+    people = Person.objects.filter(id__in=unique_ids)
+    if len(unique_ids) != people.count():
+        return JsonResponse({
+            'status': 'error',
+            'message': 'One or more person_ids were not found'
+        }, status=400)
+
+    if request.method == "POST":
+        if data.get('replace'):
+            SessionExpectedPerson.objects.filter(session=session).delete()
+
+        created_count = 0
+        for person in people:
+            _, created = SessionExpectedPerson.objects.get_or_create(
+                session=session,
+                person=person
+            )
+            if created:
+                created_count += 1
+
+        return JsonResponse({
+            'status': 'success',
+            'session_id': session_id,
+            'created_count': created_count,
+            'expected_count': get_expected_count(session)
+        })
+
+    deleted_count, _ = SessionExpectedPerson.objects.filter(
+        session=session,
+        person__in=people
+    ).delete()
+
+    return JsonResponse({
+        'status': 'success',
+        'session_id': session_id,
+        'deleted_count': deleted_count,
+        'expected_count': get_expected_count(session)
     })
 
 @require_http_methods(["POST"])
@@ -560,21 +757,21 @@ def start_session_view(request, session_id):
             }, status=400)
 
     # ------------------------------------------------------------------
-    # 2. Guard: session already ended
+    # 2. Guard: session already completed or cancelled
     # ------------------------------------------------------------------
-    if session.status == 'ended':
+    if session.status in ['completed', 'cancelled']:
         return JsonResponse({
             'status': 'error',
-            'message': 'Cannot start session – it has already ended'
+            'message': 'Cannot start session – it is already completed or cancelled'
         }, status=400)
 
     # ------------------------------------------------------------------
-    # 3. Guard: class group has no students (prod mode only)
+    # 3. Guard: no expected people (prod mode only)
     # ------------------------------------------------------------------
-    if not dev_mode and session.class_group and session.class_group.students.count() == 0:
+    if not dev_mode and get_expected_count(session) == 0:
         return JsonResponse({
             'status': 'error',
-            'message': 'Class group has no students. Please add students first.'
+            'message': 'No expected people set for this session. Please add them first.'
         }, status=400)
 
     # ------------------------------------------------------------------
@@ -583,7 +780,7 @@ def start_session_view(request, session_id):
     if not dev_mode and not FaceEncoding.objects.exists():
         return JsonResponse({
             'status': 'error',
-            'message': 'No face encodings found in database. Please enroll students first.'
+            'message': 'No face encodings found in database. Please enroll people first.'
         }, status=400)
 
     # ------------------------------------------------------------------
@@ -615,7 +812,7 @@ def start_session_view(request, session_id):
         # ------------------------------------------------------------------
         # 6. Persist status change
         # ------------------------------------------------------------------
-        session.status = 'ongoing'
+        session.status = 'in_progress'
         session.start_time = timezone.now()
         if request.user.is_authenticated:
             session.created_by = request.user
@@ -631,7 +828,7 @@ def start_session_view(request, session_id):
         return JsonResponse({
             'status': 'started',
             'session_id': str(session_id),
-            'subject': session.name,
+            'name': session.name,
             'mode': 'dev' if dev_mode else 'prod',
             'message': f"Recognition started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
         })
@@ -671,8 +868,8 @@ def end_session_view(request, session_id):
         # Clean up
         active_recognition.pop(str(session_id), None)
 
-    if session.status != 'ended':
-        session.status = 'ended'
+    if session.status not in ['completed', 'cancelled']:
+        session.status = 'completed'
         session.end_time = timezone.now()
         session.save()
 
@@ -692,7 +889,7 @@ def end_session_view(request, session_id):
             'message': f"Session '{session.name}' ended successfully",
             'session': {
                 'id': str(session.id),
-                'subject': session.name,
+                'name': session.name,
                 'status': session.status,
                 'ended_at': isoformat_or_none(session.end_time)
             }
@@ -703,7 +900,7 @@ def end_session_view(request, session_id):
             'message': f"Session '{session.name}' was already ended",
             'session': {
                 'id': str(session.id),
-                'subject': session.name,
+                'name': session.name,
                 'status': session.status,
                 'ended_at': isoformat_or_none(session.end_time)
             }
@@ -739,9 +936,9 @@ def stop_all_sessions_view(request):
                 except Exception:
                     pass
 
-            # Update session status if still ongoing
-            if session.status == 'ongoing':
-                session.status = 'ended'
+            # Update session status if still in progress
+            if session.status == 'in_progress':
+                session.status = 'cancelled'
                 session.end_time = timezone.now()
                 session.save()
 
@@ -758,7 +955,7 @@ def stop_all_sessions_view(request):
 
                 stopped_sessions.append({
                     'id': str(session.id),
-                    'subject': session.name
+                    'name': session.name
                 })
                 stopped_count += 1
 
@@ -785,9 +982,13 @@ def update_session_view(request, session_id):
     Method: POST, PATCH, or PUT
 
     Accepts JSON body with fields to update:
-    - subject: string
-    - class_group: UUID or null
-    - status: 'scheduled', 'ongoing', or 'ended'
+    - name | subject: string
+    - description: string
+    - session_type: string
+    - start_time: datetime
+    - end_time: datetime
+    - expected_count: integer
+    - status: 'scheduled', 'in_progress', 'completed', or 'cancelled'
 
     Returns JSON response with updated session
     """
@@ -800,46 +1001,57 @@ def update_session_view(request, session_id):
         else:
             data = request.POST.dict()
 
+        if 'name' not in data and 'subject' in data:
+            data['name'] = data.pop('subject')
+
         # Validate and update allowed fields
         updated_fields = []
 
-        if 'subject' in data:
-            session.name = data['subject']
-            updated_fields.append('subject')
+        field_map = {
+            'name': 'name',
+            'description': 'description',
+            'session_type': 'session_type',
+            'start_time': 'start_time',
+            'end_time': 'end_time',
+            'expected_count': 'expected_count',
+        }
 
-        if 'class_group' in data:
-            if data['class_group']:
-                from .models import ClassGroup
-                try:
-                    class_group = ClassGroup.objects.get(id=data['class_group'])
-                    session.class_group = class_group
-                    updated_fields.append('class_group')
-                except ClassGroup.DoesNotExist:
+        for key, attr in field_map.items():
+            if key not in data:
+                continue
+            value = data[key]
+            if attr in ['start_time', 'end_time'] and isinstance(value, str):
+                parsed = parse_datetime(value)
+                if parsed is None:
                     return JsonResponse({
                         'status': 'error',
-                        'message': f"Class group with id {data['class_group']} not found"
+                        'message': f"Invalid datetime format for {attr}"
                     }, status=400)
-            else:
-                session.class_group = None
-                updated_fields.append('class_group')
+                value = parsed
+
+            setattr(session, attr, value)
+            updated_fields.append(attr)
 
         if 'status' in data:
-            valid_statuses = ['scheduled', 'ongoing', 'ended']
+            valid_statuses = [choice[0] for choice in Session.STATUS_CHOICES]
             if data['status'] in valid_statuses:
                 old_status = session.status
                 session.status = data['status']
                 updated_fields.append('status')
 
-                # If manually ending session, set end_time
-                if data['status'] == 'ended' and old_status != 'ended':
-                    session.end_time = timezone.now()
+                # If manually ending session, set end_time and stop recognition
+                if data['status'] in ['completed', 'cancelled'] and old_status not in ['completed', 'cancelled']:
+                    if not session.end_time:
+                        session.end_time = timezone.now()
 
-                    # Also stop recognition if running
                     active = active_recognition.get(str(session_id))
                     if active:
                         if active.get("stop_flag"):
                             active["stop_flag"].set()
                         active_recognition.pop(str(session_id), None)
+
+                if data['status'] == 'in_progress' and not session.start_time:
+                    session.start_time = timezone.now()
             else:
                 return JsonResponse({
                     'status': 'error',
@@ -854,7 +1066,7 @@ def update_session_view(request, session_id):
             try:
                 Event.objects.create(
                     session=session,
-                    event_type='session_updated',
+                    event_type='manual_override',
                     severity='info',
                     message=f"Session updated: {', '.join(updated_fields)}"
                 )
@@ -867,9 +1079,10 @@ def update_session_view(request, session_id):
                 'updated_fields': updated_fields,
                 'session': {
                     'id': str(session.id),
-                    'subject': session.name,
-                    'class_group': str(session.class_group.id) if session.class_group else None,
-                    'class_group_name': session.class_group.name if session.class_group else None,
+                    'name': session.name,
+                    'description': session.description,
+                    'session_type': session.session_type,
+                    'expected_count': get_expected_count(session),
                     'status': session.status,
                     'created_at': isoformat_or_none(session.created_at),
                     'start_time': isoformat_or_none(session.start_time),
@@ -882,7 +1095,7 @@ def update_session_view(request, session_id):
                 'message': 'No fields to update',
                 'session': {
                     'id': str(session.id),
-                    'subject': session.name,
+                    'name': session.name,
                     'status': session.status,
                 }
             })
@@ -917,96 +1130,76 @@ def session_events_partial(request, session_id):
         ]
     })
 
-def session_present_students_partial(request, session_id):
-    """Get present students for a session"""
+def session_present_people_partial(request, session_id):
+    """Get present people for a session"""
     session = get_object_or_404(Session, id=session_id)
-    present_records = AttendanceSummary.objects.filter(session=session).select_related('person')
-    present_students = [r.person for r in present_records]
-    
+    present_records = list(get_present_records(session).select_related('person'))
+
     return JsonResponse({
         'status': 'ok',
         'session_id': session_id,
-        'present_students': [
+        'present_people': [
             {
-                'id': student.id,
-                'name': student.name,
-                'student_id': student.student_id
+                'id': record.person.id,
+                'name': record.person.get_full_name(),
+                'identification_number': record.person.identification_number,
+                'status': record.status
             }
-            for student in present_students
+            for record in present_records
         ],
-        'count': len(present_students)
+        'count': len(present_records)
     })
 
-def session_absent_students_partial(request, session_id):
-    """Get absent students for a session"""
+def session_absent_people_partial(request, session_id):
+    """Get absent people for a session"""
     session = get_object_or_404(Session, id=session_id)
-    expected_students = session.class_group.students.all() if session.class_group else Person.objects.none()
-    present_records = AttendanceSummary.objects.filter(session=session).select_related('person')
-    present_students = [r.person for r in present_records]
-    absent_students = expected_students.exclude(id__in=[s.id for s in present_students])
+    expected_people = Person.objects.filter(expected_sessions__session=session)
+    present_records = list(get_present_records(session).select_related('person'))
+    present_ids = [record.person.id for record in present_records]
+    absent_people = expected_people.exclude(id__in=present_ids)
     
     return JsonResponse({
         'status': 'ok',
         'session_id': session_id,
-        'absent_students': [
+        'absent_people': [
             {
-                'id': student.id,
-                'name': student.full_name,
-                'student_id': student.id
+                'id': person.id,
+                'name': person.get_full_name(),
+                'identification_number': person.identification_number
             }
-            for student in absent_students
+            for person in absent_people
         ],
-        'count': len(list(absent_students))
+        'count': absent_people.count()
     })
 
 def session_unidentified_faces_partial(request, session_id):
     """Get unidentified faces for a session"""
-    from recognition.models import UnidentifiedFace
-    
     session = get_object_or_404(Session, id=session_id)
-    
-    try:
-        unidentified_faces = UnidentifiedFace.objects.filter(session=session)
-    except:
-        unidentified_faces = []
-    
-    # Build a safe list of unidentified faces with robust attribute checks
+    unidentified_faces = UnidentifiedFace.objects.filter(session=session)
+
     faces_list = []
     for face in unidentified_faces:
-        image_url = None
+        cropped_url = None
+        full_url = None
 
-        # Preferred: Django FileField named 'image'
-        if hasattr(face, 'image'):
+        if face.cropped_face:
             try:
-                img_field = getattr(face, 'image')
-                if img_field:
-                    try:
-                        image_url = img_field.url
-                    except Exception:
-                        # Fallback to using stored name/path if url() not available
-                        img_name = getattr(img_field, 'name', None)
-                        if img_name:
-                            image_url = os.path.join(settings.MEDIA_URL, img_name)
+                cropped_url = request.build_absolute_uri(face.cropped_face.url)
             except Exception:
-                image_url = None
+                cropped_url = os.path.join(settings.MEDIA_URL, face.cropped_face.name)
 
-        # Alternate attribute names that may exist on the model
-        elif hasattr(face, 'image_url'):
-            image_url = getattr(face, 'image_url', None)
-        elif hasattr(face, 'file_path'):
-            file_path = getattr(face, 'file_path', None)
-            if file_path:
-                image_url = os.path.join(settings.MEDIA_URL, file_path)
-
-        # Confidence and timestamp with safe getattr usage
-        confidence = getattr(face, 'confidence', None)
-        ts = getattr(face, 'timestamp', None)
-        timestamp = ts.isoformat() if ts else None
+        if face.full_frame:
+            try:
+                full_url = request.build_absolute_uri(face.full_frame.url)
+            except Exception:
+                full_url = os.path.join(settings.MEDIA_URL, face.full_frame.name)
 
         faces_list.append({
-            'image_url': image_url,
-            'confidence': confidence,
-            'timestamp': timestamp
+            'id': face.id,
+            'cropped_face': cropped_url,
+            'full_frame': full_url,
+            'confidence': face.confidence,
+            'timestamp': isoformat_or_none(face.timestamp)
         })
 
     return JsonResponse({
@@ -1016,21 +1209,20 @@ def session_unidentified_faces_partial(request, session_id):
         'count': len(faces_list)
     })
 
-def record_event(session, message, event_type='info'):
-    Event.objects.create(session=session, message=message, event_type=event_type)
+def record_event(session, message, event_type='manual_override', severity='info'):
+    Event.objects.create(
+        session=session,
+        message=message,
+        event_type=event_type,
+        severity=severity
+    )
 
 def recognition_progress_partial(request, session_id):
     """Get real-time recognition progress for a session"""
     session = get_object_or_404(Session, id=session_id)
-    total_expected = session.class_group.students.count() if session.class_group else 0
-    present_count = AttendanceSummary.objects.filter(session=session).count()
-    
-    # Import UnidentifiedFace here to avoid NameError when the model is not in global scope
-    try:
-        from recognition.models import UnidentifiedFace
-        unknown_count = UnidentifiedFace.objects.filter(session=session).count()
-    except Exception:
-        unknown_count = 0
+    total_expected = get_expected_count(session)
+    present_count = get_present_records(session).count()
+    unknown_count = UnidentifiedFace.objects.filter(session=session).count()
     
     active_data = active_recognition.get(str(session_id), {})
     is_running = active_data.get("thread") and active_data["thread"].is_alive()

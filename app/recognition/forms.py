@@ -1,7 +1,7 @@
 from django import forms
 from .models import Person, Session
 
-class StudentForm(forms.ModelForm):
+class PersonForm(forms.ModelForm):
     class Meta:
         model = Person
         fields = [
@@ -24,6 +24,9 @@ class StudentForm(forms.ModelForm):
             'status': forms.Select(attrs={'class': 'form-control'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+
+# Backwards compatibility
+StudentForm = PersonForm
 
 class SessionForm(forms.ModelForm):
     class Meta:
