@@ -297,6 +297,160 @@ def upload_frame(request):
             "message": str(e)
         }, status=500)
 
+
+@api_view(['GET'])
+def get_people_with_encodings(request):
+    """Get all people who have face encodings in the database"""
+    people = Person.objects.filter(
+        face_encodings__isnull=False
+    ).distinct().order_by('first_name', 'last_name')
+    
+    people_data = [
+        {
+            'id': person.id,
+            'name': person.get_full_name(),
+            'identification_number': person.identification_number,
+            'email': person.email,
+            'phone': person.phone,
+            'status': person.status,
+            'encoding_count': person.face_encodings.count()
+        }
+        for person in people
+    ]
+    
+    return Response({
+        'status': 'ok',
+        'count': len(people_data),
+        'people': people_data
+    })
+
+
+@api_view(['GET'])
+def get_person_detail(request, person_id):
+    """Get detailed information about a specific person"""
+    person = get_object_or_404(Person, id=person_id)
+    
+    return Response({
+        'status': 'ok',
+        'person': {
+            'id': person.id,
+            'first_name': person.first_name,
+            'last_name': person.last_name,
+            'full_name': person.get_full_name(),
+            'identification_number': person.identification_number,
+            'email': person.email,
+            'phone': person.phone,
+            'status': person.status,
+            'date_of_birth': person.date_of_birth.isoformat() if person.date_of_birth else None,
+            'notes': person.notes,
+            'encoding_count': person.face_encodings.count(),
+            'created_at': isoformat_or_none(person.created_at),
+            'updated_at': isoformat_or_none(person.updated_at)
+        }
+    })
+
+
+@api_view(['GET'])
+def list_rosters(request):
+    """Get all rosters (sessions with their expected people)"""
+    sessions = Session.objects.filter(
+        expected_persons__isnull=False
+    ).distinct().order_by('-created_at')
+    
+    rosters = []
+    for session in sessions:
+        expected_people = Person.objects.filter(expected_sessions__session=session)
+        rosters.append({
+            'session_id': session.id,
+            'name': session.name,
+            'description': session.description,
+            'session_type': session.session_type,
+            'people_count': expected_people.count(),
+            'created_at': isoformat_or_none(session.created_at)
+        })
+    
+    return Response({
+        'status': 'ok',
+        'count': len(rosters),
+        'rosters': rosters
+    })
+
+
+@csrf_exempt
+@api_view(['POST'])
+def create_roster(request):
+    """
+    Create or update a roster for a session by setting expected people.
+    
+    Request body:
+    {
+        'session_id': 'uuid',
+        'person_ids': ['uuid1', 'uuid2', ...],
+        'replace': true/false  (optional, default: true)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Request body is not valid JSON'
+        }, status=400)
+    
+    session_id = data.get('session_id')
+    person_ids = data.get('person_ids', [])
+    replace = data.get('replace', True)
+    
+    if not session_id:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'session_id is required'
+        }, status=400)
+    
+    if not isinstance(person_ids, list):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'person_ids must be a list'
+        }, status=400)
+    
+    session = get_object_or_404(Session, id=session_id)
+    
+    # Filter out duplicates
+    unique_ids = list(dict.fromkeys(person_ids))
+    people = Person.objects.filter(id__in=unique_ids)
+    
+    if len(unique_ids) != people.count():
+        return JsonResponse({
+            'status': 'error',
+            'message': 'One or more person_ids were not found'
+        }, status=400)
+    
+    # Clear existing expected people if replace=True
+    if replace:
+        SessionExpectedPerson.objects.filter(session=session).delete()
+    
+    # Add new expected people
+    created_count = 0
+    for person in people:
+        _, created = SessionExpectedPerson.objects.get_or_create(
+            session=session,
+            person=person
+        )
+        if created:
+            created_count += 1
+    
+    # Update expected_count on session
+    session.expected_count = get_expected_count(session)
+    session.save()
+    
+    return Response({
+        'status': 'success',
+        'session_id': str(session_id),
+        'created_count': created_count,
+        'total_expected': get_expected_count(session),
+        'message': f'Successfully added {created_count} person(s) to roster'
+    }, status=201)
+
 @api_view(['GET'])
 def index(request):
     """Home page info endpoint"""

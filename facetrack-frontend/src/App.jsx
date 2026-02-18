@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage';
 import { SessionsPage } from './pages/SessionsPage';
 import { SessionDetailPage } from './pages/SessionDetailPage';
 import { CreateSessionPage } from './pages/CreateSessionPage';
+import { RosterSelectPage } from './pages/RosterSelectPage';
 import { EnrollmentForm } from './components/EnrollmentForm';
 import { Login } from './pages/LoginPage';
 import { Signup } from './pages/SignupPage';
@@ -101,6 +102,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <CreateSessionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/session/:sessionId/roster"
+          element={
+            <ProtectedRoute>
+              <RosterSelectPage />
             </ProtectedRoute>
           }
         />

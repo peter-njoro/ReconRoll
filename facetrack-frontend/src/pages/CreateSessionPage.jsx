@@ -1,61 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recognitionService } from '../api/recognitionService';
 
 export function CreateSessionPage() {
     const navigate = useNavigate();
     const [formData, setFormData] = useState({
-        subject: '',
-        class_group: '',  // ← CHANGED from class_group_name
+        name: '',
+        description: '',
+        session_type: 'recognition',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    console.log('CreateSessionPage rendered with formData:', formData);
-    console.log('Current loading state:', loading);
-    console.log('Current error state:', error);
-
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        console.log(`Form field changed: ${name} = ${value}`);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
-        
-        console.log('Form submitted with data:', {
-            subject: formData.subject,
-            class_group: formData.class_group || null,  // ← CHANGED
-        });
 
         try {
+            // Backend expects start_time (datetime) and status
+            // Default to current time and 'scheduled' status
+            const now = new Date().toISOString();
+            
             const response = await recognitionService.createSession({
-                subject: formData.subject,
-                class_group: formData.class_group || null,  // ← CHANGED
+                name: formData.name,
+                description: formData.description || '',
+                session_type: formData.session_type,
+                start_time: now,  // Required by backend
+                status: 'scheduled',  // Default status
             });
 
-            console.log('Session created successfully:', response.data);
-            // response.data contains the session object; navigate using its id
-            alert('Session created');
-            navigate(`/session/${response.data.session.id}`);  // Note: response wraps session in .session
-        } catch (err) {
-            console.error('Error creating session:', err);
-            console.error('Error response data:', err.response?.data);
-            console.error('Error message:', err.message);
+            console.log('[CreateSessionPage] API Response:', response);
+            const sessionId = response.data.session?.id || response.data.id;
+            console.log('[CreateSessionPage] Extracted sessionId:', sessionId);
             
+            if (!sessionId) {
+                setError('Failed to extract session ID from response');
+                return;
+            }
+            
+            // Redirect to roster selection page to add expected people
+            console.log(`[CreateSessionPage] Navigating to /session/${sessionId}/roster`);
+            navigate(`/session/${sessionId}/roster`);
+        } catch (err) {
+            console.error('[CreateSessionPage] Error:', err);
             const errorMessage = 
                 err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
-                err.message;
-            
-            console.log('Setting error state to:', errorMessage);
+                err.message ||
+                'Failed to create session';
             setError(errorMessage);
         } finally {
             setLoading(false);
-            console.log('Request completed, loading state set to false');
         }
     };
 
@@ -81,15 +82,15 @@ export function CreateSessionPage() {
 
                         <form onSubmit={handleSubmit} className="form-content">
                             <div className="form-group">
-                                <label htmlFor="subject">Session Subject *</label>
+                                <label htmlFor="name">Session Name *</label>
                                 <div className="input-wrapper">
                                     <i className="bi bi-pencil"></i>
                                     <input
                                         type="text"
-                                        id="subject"
-                                        name="subject"
-                                        placeholder="e.g., CS101 - Lecture 5"
-                                        value={formData.subject}
+                                        id="name"
+                                        name="name"
+                                        placeholder="e.g., Team Meeting - Feb 18"
+                                        value={formData.name}
                                         onChange={handleChange}
                                         required
                                     />
@@ -97,36 +98,40 @@ export function CreateSessionPage() {
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="class_group">Class Group (Optional)</label>
+                                <label htmlFor="description">Description (Optional)</label>
                                 <div className="input-wrapper">
-                                    <i className="bi bi-folder"></i>
-                                    {/* 
-                                        TODO: This needs to be a <select> dropdown that fetches
-                                        ClassGroup objects from the API and sends the ID, not a name.
-                                        
-                                        The class_group field is a ForeignKey that expects a UUID/ID.
-                                        For now, you can either:
-                                        1. Leave this empty (class_group is optional)
-                                        2. Change to a <select> that calls recognitionService.getClassGroups()
-                                           and populates options with { value: group.id, label: group.name }
-                                        
-                                        Example select implementation:
-                                        
-                                        <select name="class_group" value={formData.class_group} onChange={handleChange}>
-                                            <option value="">-- None --</option>
-                                            {classGroups.map(group => (
-                                                <option key={group.id} value={group.id}>{group.name}</option>
-                                            ))}
-                                        </select>
-                                    */}
-                                    <input
-                                        type="text"
-                                        id="class_group"
-                                        name="class_group"  // ← CHANGED from class_group_name
-                                        placeholder="Enter class group ID (or leave empty)"
-                                        value={formData.class_group}
+                                    <i className="bi bi-file-text"></i>
+                                    <textarea
+                                        id="description"
+                                        name="description"
+                                        placeholder="Add any notes about this session..."
+                                        value={formData.description}
                                         onChange={handleChange}
+                                        rows="3"
+                                        style={{
+                                            paddingLeft: '2.5rem',
+                                            paddingRight: '0.75rem',
+                                            paddingTop: '0.75rem',
+                                            paddingBottom: '0.75rem',
+                                        }}
                                     />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="session_type">Session Type</label>
+                                <div className="input-wrapper">
+                                    <i className="bi bi-layers"></i>
+                                    <select
+                                        id="session_type"
+                                        name="session_type"
+                                        value={formData.session_type}
+                                        onChange={handleChange}
+                                    >
+                                        <option value="recognition">Face Recognition</option>
+                                        <option value="enrollment">Face Enrollment</option>
+                                        <option value="verification">Face Verification</option>
+                                    </select>
                                 </div>
                             </div>
 

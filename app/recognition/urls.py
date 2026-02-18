@@ -23,6 +23,10 @@ urlpatterns = [
     path('session/<uuid:session_id>/update/', views.update_session_view, name='update_session'),
     
     # API endpoints
+    path('people/', views.get_people_with_encodings, name='get_people'),
+    path('people/<uuid:person_id>/', views.get_person_detail, name='get_person_detail'),
+    path('rosters/', views.list_rosters, name='list_rosters'),
+    path('roster/create/', views.create_roster, name='create_roster'),
     
     # Partial views
     path('session/<uuid:session_id>/events_partial/', views.session_events_partial, name='session_events_partial'),

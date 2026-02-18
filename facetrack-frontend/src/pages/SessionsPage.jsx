@@ -7,26 +7,40 @@ export function SessionsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const fetchSessions = async () => {
+        try {
+            const response = await recognitionService.listSessions();
+            const data = response.data;
+
+            setSessions(
+                Array.isArray(data)
+                    ? data
+                    : data.results || []
+            );
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchSessions = async () => {
-            try {
-                const response = await recognitionService.listSessions();
-                const data = response.data;
-
-                setSessions(
-                    Array.isArray(data)
-                        ? data
-                        : data.results || []
-                );
-            } catch (err) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchSessions();
     }, []);
+
+    const endSession = async (sessionId) => {
+        if (!window.confirm('Are you sure you want to end this session?')) {
+            return;
+        }
+
+        try {
+            await recognitionService.stopSession(sessionId);
+            await fetchSessions();
+        } catch (err) {
+            console.error('Error ending session:', err);
+            setError('Failed to end session');
+        }
+    };
 
     if (loading) {
         return (
@@ -82,7 +96,7 @@ export function SessionsPage() {
                         {Array.isArray(sessions) && sessions.map(session => (
                             <div key={session.id} className="session-card">
                                 <div className="session-card-header">
-                                    <h3 className="session-title">{session.subject}</h3>
+                                    <h3 className="session-title">{session.name}</h3>
                                     <span className={`status-badge ${session.status.toLowerCase()}`}>
                                         {session.status}
                                     </span>
@@ -91,10 +105,10 @@ export function SessionsPage() {
                                 <div className="session-info">
                                     <div className="info-row">
                                         <span className="info-label">
-                                            <i className="bi bi-folder"></i>
-                                            Class Group
+                                            <i className="bi bi-layers"></i>
+                                            Type
                                         </span>
-                                        <span className="info-value">{session.class_group || 'N/A'}</span>
+                                        <span className="info-value">{session.session_type || 'N/A'}</span>
                                     </div>
 
                                     <div className="info-row">

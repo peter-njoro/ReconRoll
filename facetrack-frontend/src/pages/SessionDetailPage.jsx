@@ -104,6 +104,14 @@ export function SessionDetailPage() {
 
     // Capture and upload frame
     const captureAndUploadFrame = async () => {
+        // Validate sessionId exists
+        if (!sessionId) {
+            console.error('Session ID is undefined in captureAndUploadFrame');
+            return;
+        }
+
+        console.debug(`[captureAndUploadFrame] sessionId = "${sessionId}"`);
+
         if (!videoRef.current || !canvasRef.current || !isProcessing) return;
 
         const video = videoRef.current;
@@ -122,34 +130,50 @@ export function SessionDetailPage() {
 
         try {
             // Upload frame to backend
+            console.debug(`[uploadFrame] Calling with sessionId: "${sessionId}"`);
             await recognitionService.uploadFrame(sessionId, frameData);
         } catch (err) {
-            console.error('Error uploading frame:', err);
+            console.error('[uploadFrame] Error:', err.message);
         }
     };
 
     // Start recognition session
     const startRecognition = async () => {
+        // Validate session ID
+        if (!sessionId) {
+            setError('Session ID is missing. Unable to start recognition.');
+            console.error('[startRecognition] sessionId is undefined');
+            return;
+        }
+
+        console.log(`[startRecognition] Starting with sessionId: "${sessionId}"`);
+
         try {
             setError(null);
 
             // Start the recognition thread on the backend
+            console.debug(`[startRecognition] Calling startSession API...`);
             await recognitionService.startSession(sessionId);
+            console.debug(`[startRecognition] startSession successful`);
 
             // Start webcam
+            console.debug(`[startRecognition] Starting webcam...`);
             await startWebcam();
 
             // Start processing flag
             setIsProcessing(true);
 
             // Start uploading frames every 500ms (2 FPS)
+            console.debug(`[startRecognition] Setting up frame upload interval...`);
             uploadIntervalRef.current = setInterval(() => {
                 captureAndUploadFrame();
             }, 500);
 
             // Refresh data immediately
             await fetchData();
+            console.log(`[startRecognition] Recognition started successfully`);
         } catch (err) {
+            console.error('[startRecognition] Error:', err.message);
             setError('Failed to start recognition: ' + err.message);
             setIsProcessing(false);
         }
@@ -215,19 +239,19 @@ export function SessionDetailPage() {
         <div className="session-detail">
             <div className="session-detail-container">
                 <div className="session-detail-header">
-                    <h1 className="session-detail-title">{session.subject}</h1>
+                    <h1 className="session-detail-title">{session.name}</h1>
                     <div className="session-detail-info">
                         <div className="detail-info-item">
                             <div className="detail-info-label">Status</div>
                             <div className="detail-info-value">
-                                <span className={`status-badge ${session.status === 'ongoing' ? 'running' : 'stopped'}`}>
-                                    {session.status === 'ongoing' ? '🟢 Running' : '🔴 Stopped'}
+                                <span className={`status-badge ${session.status === 'in_progress' ? 'running' : 'stopped'}`}>
+                                    {session.status === 'in_progress' ? '🟢 Running' : '🔴 Stopped'}
                                 </span>
                             </div>
                         </div>
                         <div className="detail-info-item">
-                            <div className="detail-info-label">Class Group</div>
-                            <div className="detail-info-value">{session.class_group || 'N/A'}</div>
+                            <div className="detail-info-label">Type</div>
+                            <div className="detail-info-value">{session.session_type || 'N/A'}</div>
                         </div>
                         <div className="detail-info-item">
                             <div className="detail-info-label">Created At</div>
@@ -407,32 +431,32 @@ export function SessionDetailPage() {
 
                 <div className="students-section">
                     <div className="students-list">
-                        <h3><i className="bi bi-check-circle"></i> Present Students ({presentStudents.length})</h3>
+                        <h3><i className="bi bi-check-circle"></i> Present ({presentStudents.length})</h3>
                         {presentStudents.length > 0 ? (
                             <ul>
-                                {presentStudents.map(student => (
-                                    <li key={student.id}>
-                                        <i className="bi bi-person-check"></i> {student.full_name} ({student.registration_number})
+                                {presentStudents.map(person => (
+                                    <li key={person.id}>
+                                        <i className="bi bi-person-check"></i> {person.name || person.full_name} ({person.identification_number || 'N/A'})
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No present students yet</p>
+                            <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No people present yet</p>
                         )}
                     </div>
 
                     <div className="students-list">
-                        <h3><i className="bi bi-x-circle"></i> Absent Students ({absentStudents.length})</h3>
+                        <h3><i className="bi bi-x-circle"></i> Absent ({absentStudents.length})</h3>
                         {absentStudents.length > 0 ? (
                             <ul>
-                                {absentStudents.map(student => (
-                                    <li key={student.id}>
-                                        <i className="bi bi-person-x"></i> {student.full_name} ({student.registration_number})
+                                {absentStudents.map(person => (
+                                    <li key={person.id}>
+                                        <i className="bi bi-person-x"></i> {person.name || person.full_name} ({person.identification_number || 'N/A'})
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No absent students</p>
+                            <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No absent people</p>
                         )}
                     </div>
                 </div>

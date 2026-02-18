@@ -44,8 +44,36 @@ export const recognitionService = {
     // Frame upload (DRF router)
     // -----------------------------------------------------------------------
 
-    uploadFrame: (sessionId, frameData) =>
-        apiClient.post(`/session/${sessionId}/upload_frame/`, { frame: frameData }),
+    uploadFrame: (sessionId, frameData) => {
+        if (!sessionId) {
+            console.error('[uploadFrame] sessionId is missing/undefined');
+            return Promise.reject(new Error('Session ID is required for frame upload'));
+        }
+        if (!frameData) {
+            console.error('[uploadFrame] frameData is missing/undefined');
+            return Promise.reject(new Error('Frame data is required'));
+        }
+        
+        // Convert base64 data URL to binary blob
+        const base64String = frameData.split(',')[1]; // Remove "data:image/jpeg;base64," prefix
+        const binaryString = atob(base64String);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'image/jpeg' });
+        
+        // Create FormData for multipart upload
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');
+        
+        const url = `/session/${sessionId}/upload_frame/`;
+        console.debug(`[uploadFrame] sessionId="${sessionId}"`);
+        console.debug(`[uploadFrame] Calling POST ${url} with multipart/form-data`);
+        
+        // Axios will automatically set Content-Type: multipart/form-data with boundary when using FormData
+        return apiClient.post(url, formData);
+    },
 
     // -----------------------------------------------------------------------
     // Session detail data – traditional Django partial views.
@@ -58,12 +86,12 @@ export const recognitionService = {
     getPresentStudents: (sessionId) =>
         apiClient
             .get(`/session/${sessionId}/present_partial/`)
-            .then((res) => ({ ...res, data: res.data.present_students })),
+            .then((res) => ({ ...res, data: res.data.present_people })),
 
     getAbsentStudents: (sessionId) =>
         apiClient
             .get(`/session/${sessionId}/absent_partial/`)
-            .then((res) => ({ ...res, data: res.data.absent_students })),
+            .then((res) => ({ ...res, data: res.data.absent_people })),
 
     getSessionEvents: (sessionId) =>
         apiClient
@@ -92,9 +120,22 @@ export const recognitionService = {
     // -----------------------------------------------------------------------
     // Class Groups  (DRF router)
     // -----------------------------------------------------------------------
-    // getClassGroups:    ()        => api.get('/class-groups/'),
-    // getClassGroup:     (id)      => api.get(`/class-groups/${id}/`),
-    // createClassGroup:  (data)    => api.post('/class-groups/', data),
-    // updateClassGroup:  (id, data)=> api.put(`/class-groups/${id}/`, data),
-    // deleteClassGroup:  (id)      => api.delete(`/class-groups/${id}/`),
+    getClassGroups: () => apiClient.get('/class-groups/'),
+    getClassGroup: (id) => apiClient.get(`/class-groups/${id}/`),
+    createClassGroup: (data) => apiClient.post('/class-groups/', data),
+    updateClassGroup: (id, data) => apiClient.put(`/class-groups/${id}/`, data),
+    deleteClassGroup: (id) => apiClient.delete(`/class-groups/${id}/`),
+
+    // -----------------------------------------------------------------------
+    // People & Rosters
+    // -----------------------------------------------------------------------
+    getPeopleWithEncodings: () => apiClient.get('/people/'),
+    getPersonDetail: (personId) => apiClient.get(`/people/${personId}/`),
+    listRosters: () => apiClient.get('/rosters/'),
+    createRoster: (sessionId, personIds, replace = true) =>
+        apiClient.post('/roster/create/', {
+            session_id: sessionId,
+            person_ids: personIds,
+            replace: replace,
+        }),
 };
