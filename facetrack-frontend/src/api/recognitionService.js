@@ -109,30 +109,20 @@ export const recognitionService = {
             .then((res) => ({ ...res, data: res.data.unidentified_faces })),
 
     // -----------------------------------------------------------------------
-    // Students  (DRF router)
-    // -----------------------------------------------------------------------
-    // getStudents:    ()           => api.get('/students/'),
-    // getStudent:     (id)         => api.get(`/students/${id}/`),
-    // createStudent:  (data)       => api.post('/students/', data),
-    // updateStudent:  (id, data)   => api.put(`/students/${id}/`, data),
-    // deleteStudent:  (id)         => api.delete(`/students/${id}/`),
-
-    // -----------------------------------------------------------------------
-    // Class Groups  (DRF router)
-    // -----------------------------------------------------------------------
-    getClassGroups: () => apiClient.get('/class-groups/'),
-    getClassGroup: (id) => apiClient.get(`/class-groups/${id}/`),
-    createClassGroup: (data) => apiClient.post('/class-groups/', data),
-    updateClassGroup: (id, data) => apiClient.put(`/class-groups/${id}/`, data),
-    deleteClassGroup: (id) => apiClient.delete(`/class-groups/${id}/`),
-
-    // -----------------------------------------------------------------------
     // People & Rosters
     // -----------------------------------------------------------------------
     getPeopleWithEncodings: () => apiClient.get('/people/'),
     getPersonDetail: (personId) => apiClient.get(`/people/${personId}/`),
+    
+    // Roster management
     listRosters: () => apiClient.get('/rosters/'),
-    createRoster: (sessionId, personIds, replace = true) =>
+    getRosterDetail: (rosterId) => apiClient.get(`/roster/${rosterId}/`),
+    createRoster: (data) => apiClient.post('/roster/create/', data),
+    updateRoster: (rosterId, data) => apiClient.post(`/roster/${rosterId}/update/`, data),
+    deleteRoster: (rosterId) => apiClient.delete(`/roster/${rosterId}/delete/`),
+    
+    // Legacy - sets expected people for a session directly
+    createRosterForSession: (sessionId, personIds, replace = true) =>
         apiClient.post('/roster/create/', {
             session_id: sessionId,
             person_ids: personIds,

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
-    Person, FaceEncoding, Session,
-    SessionExpectedPerson, Recognition, AttendanceSummary
+    Person, FaceEncoding, Session, Roster,
+    RosterAttendance, Recognition, AttendanceSummary
 )
 from users.models import User
 
@@ -47,12 +47,22 @@ class SessionAdmin(admin.ModelAdmin):
     date_hierarchy = 'start_time'
 
 
-@admin.register(SessionExpectedPerson)
-class SessionExpectedPersonAdmin(admin.ModelAdmin):
-    list_display = ['session', 'person', 'created_at']
+@admin.register(Roster)
+class RosterAdmin(admin.ModelAdmin):
+    list_display = ['name', 'created_by', 'created_at']
     list_filter = ['created_at']
-    search_fields = ['session__name', 'person__first_name', 'person__last_name', 'person__identification_number']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
     ordering = ['-created_at']
+
+
+@admin.register(RosterAttendance)
+class RosterAttendanceAdmin(admin.ModelAdmin):
+    list_display = ['person', 'session', 'roster', 'status', 'marked_at']
+    list_filter = ['status', 'marked_at']
+    search_fields = ['person__first_name', 'person__last_name', 'session__name', 'roster__name']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-marked_at']
 
 
 @admin.register(Recognition)

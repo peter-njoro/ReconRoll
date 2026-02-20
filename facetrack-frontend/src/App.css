@@ -659,6 +659,12 @@ textarea {
   font-size: 0.95rem;
 }
 
+.hint {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .input-wrapper {
   position: relative;
   display: flex;

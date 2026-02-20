@@ -4,13 +4,32 @@ import { recognitionService } from '../api/recognitionService';
 
 export function CreateSessionPage() {
     const navigate = useNavigate();
+    const [rosters, setRosters] = useState([]);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        session_type: 'recognition',
+        roster: '',
+        session_type: '',
     });
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
+
+    // Load rosters on mount
+    useEffect(() => {
+        const fetchRosters = async () => {
+            try {
+                const response = await recognitionService.listRosters();
+                setRosters(response.data.rosters || []);
+            } catch (err) {
+                console.error('Error fetching rosters:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRosters();
+    }, []);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -19,7 +38,7 @@ export function CreateSessionPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
+        setSubmitting(true);
         setError(null);
 
         try {
@@ -27,13 +46,24 @@ export function CreateSessionPage() {
             // Default to current time and 'scheduled' status
             const now = new Date().toISOString();
             
-            const response = await recognitionService.createSession({
+            const sessionPayload = {
                 name: formData.name,
                 description: formData.description || '',
-                session_type: formData.session_type,
                 start_time: now,  // Required by backend
                 status: 'scheduled',  // Default status
-            });
+            };
+
+            // Add roster if selected
+            if (formData.roster) {
+                sessionPayload.roster = formData.roster;
+            }
+
+            // Add session_type if provided
+            if (formData.session_type) {
+                sessionPayload.session_type = formData.session_type;
+            }
+
+            const response = await recognitionService.createSession(sessionPayload);
 
             console.log('[CreateSessionPage] API Response:', response);
             const sessionId = response.data.session?.id || response.data.id;
@@ -44,9 +74,13 @@ export function CreateSessionPage() {
                 return;
             }
             
-            // Redirect to roster selection page to add expected people
-            console.log(`[CreateSessionPage] Navigating to /session/${sessionId}/roster`);
-            navigate(`/session/${sessionId}/roster`);
+            // If no roster was selected, redirect to roster selection to add expected people
+            // Otherwise, go directly to session detail
+            if (formData.roster) {
+                navigate(`/session/${sessionId}`);
+            } else {
+                navigate(`/session/${sessionId}/roster`);
+            }
         } catch (err) {
             console.error('[CreateSessionPage] Error:', err);
             const errorMessage = 
@@ -56,7 +90,7 @@ export function CreateSessionPage() {
                 'Failed to create session';
             setError(errorMessage);
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
@@ -93,6 +127,7 @@ export function CreateSessionPage() {
                                         value={formData.name}
                                         onChange={handleChange}
                                         required
+                                        disabled={submitting}
                                     />
                                 </div>
                             </div>
@@ -108,6 +143,7 @@ export function CreateSessionPage() {
                                         value={formData.description}
                                         onChange={handleChange}
                                         rows="3"
+                                        disabled={submitting}
                                         style={{
                                             paddingLeft: '2.5rem',
                                             paddingRight: '0.75rem',
@@ -119,7 +155,31 @@ export function CreateSessionPage() {
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="session_type">Session Type</label>
+                                <label htmlFor="roster">
+                                    Select Roster (Optional)
+                                    <span className="hint"> - People will be auto-populated from the roster</span>
+                                </label>
+                                <div className="input-wrapper">
+                                    <i className="bi bi-people"></i>
+                                    <select
+                                        id="roster"
+                                        name="roster"
+                                        value={formData.roster}
+                                        onChange={handleChange}
+                                        disabled={submitting || loading}
+                                    >
+                                        <option value="">-- No Roster --</option>
+                                        {rosters.map(roster => (
+                                            <option key={roster.id} value={roster.id}>
+                                                {roster.name} ({roster.people_count} people)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="session_type">Session Type (Optional)</label>
                                 <div className="input-wrapper">
                                     <i className="bi bi-layers"></i>
                                     <select
@@ -127,7 +187,9 @@ export function CreateSessionPage() {
                                         name="session_type"
                                         value={formData.session_type}
                                         onChange={handleChange}
+                                        disabled={submitting}
                                     >
+                                        <option value="">-- Select Type --</option>
                                         <option value="recognition">Face Recognition</option>
                                         <option value="enrollment">Face Enrollment</option>
                                         <option value="verification">Face Verification</option>
@@ -138,9 +200,9 @@ export function CreateSessionPage() {
                             <button
                                 type="submit"
                                 className="btn-submit"
-                                disabled={loading}
+                                disabled={submitting || loading}
                             >
-                                {loading ? (
+                                {submitting ? (
                                     <>
                                         <span className="spinner"></span>
                                         Creating Session...
@@ -148,14 +210,14 @@ export function CreateSessionPage() {
                                 ) : (
                                     <>
                                         <i className="bi bi-play-circle"></i>
-                                        Create and Start Session
+                                        Create Session
                                     </>
                                 )}
                             </button>
                         </form>
 
                         <div className="form-footer">
-                            <p>Need help? <a href="/sessions">View active sessions</a></p>
+                            <p>Need help? <a href="/sessions">View active sessions</a> or <a href="/rosters">manage rosters</a></p>
                         </div>
                     </div>
                 </div>

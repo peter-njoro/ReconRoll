@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Session, Person, AttendanceSummary, Event, SessionExpectedPerson
+from .models import Session, Person, AttendanceSummary, Event, RosterAttendance
 
 
 class PersonSerializer(serializers.ModelSerializer):
@@ -69,8 +69,13 @@ class SessionSerializer(serializers.ModelSerializer):
             session=obj,
             status__in=['present', 'late']
         ).count()
-        expected_people = SessionExpectedPerson.objects.filter(session=obj).count()
-        expected_count = expected_people if expected_people > 0 else (obj.expected_count or 0)
+        
+        # Count expected people from roster if session has one
+        if obj.roster:
+            expected_count = RosterAttendance.objects.filter(roster=obj.roster, session=obj).count()
+        else:
+            expected_count = obj.expected_count or 0
+        
         attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
         
         return {
@@ -82,7 +87,10 @@ class SessionSerializer(serializers.ModelSerializer):
         }
 
     def get_expected_people_count(self, obj):
-        return SessionExpectedPerson.objects.filter(session=obj).count()
+        # Count expected people from roster if session has one
+        if obj.roster:
+            return RosterAttendance.objects.filter(roster=obj.roster, session=obj).count()
+        return obj.expected_count or 0
     
 class EventSerializer(serializers.ModelSerializer):
     class Meta:

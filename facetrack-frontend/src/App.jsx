@@ -7,6 +7,7 @@ import { SessionsPage } from './pages/SessionsPage';
 import { SessionDetailPage } from './pages/SessionDetailPage';
 import { CreateSessionPage } from './pages/CreateSessionPage';
 import { RosterSelectPage } from './pages/RosterSelectPage';
+import { RostersPage } from './pages/RostersPage';
 import { EnrollmentForm } from './components/EnrollmentForm';
 import { Login } from './pages/LoginPage';
 import { Signup } from './pages/SignupPage';
@@ -31,6 +32,7 @@ const Navbar = () => {
         <ul className="nav nav-pills ms-auto">
           <li className="nav-item"><a className="nav-link" href="/">Home</a></li>
           <li className="nav-item"><a className="nav-link" href="/enroll">Enroll</a></li>
+          <li className="nav-item"><a className="nav-link" href="/rosters">Rosters</a></li>
           <li className="nav-item"><a className="nav-link" href="/sessions">Session History</a></li>
           {user ? (
             <>
@@ -86,6 +88,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <EnrollmentForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rosters"
+          element={
+            <ProtectedRoute>
+              <RostersPage />
             </ProtectedRoute>
           }
         />

@@ -119,6 +119,97 @@ class FaceEncoding(models.Model):
         super().save(*args, **kwargs)
 
 
+class Roster(models.Model):
+    """A reusable set of expected people for sessions"""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+    description = models.TextField(blank=True, null=True)
+    people = models.ManyToManyField(
+        Person,
+        related_name='rosters',
+        blank=True,
+        help_text="People expected to be in this roster"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rosters_created'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'rosters'
+        verbose_name = 'Roster'
+        verbose_name_plural = 'Rosters'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.people.count()} people)"
+
+
+class RosterAttendance(models.Model):
+    """Tracks attendance status for people in a roster during a session"""
+
+    STATUS_CHOICES = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('late', 'Late'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    roster = models.ForeignKey(
+        Roster,
+        on_delete=models.CASCADE,
+        related_name='attendance_records',
+        db_index=True,
+        help_text="Roster this attendance record belongs to"
+    )
+    session = models.ForeignKey(
+        'Session',
+        on_delete=models.CASCADE,
+        related_name='roster_attendance_records',
+        db_index=True,
+        help_text="Session this attendance is for"
+    )
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        related_name='roster_attendance_records',
+        db_index=True,
+        help_text="Person from the roster"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        db_index=True,
+        help_text="Attendance status"
+    )
+    marked_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Time when person was marked/recognized"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'roster_attendance'
+        verbose_name = 'Roster Attendance'
+        verbose_name_plural = 'Roster Attendances'
+        unique_together = ['roster', 'session', 'person']
+        indexes = [
+            models.Index(fields=['session', 'status']),
+            models.Index(fields=['roster', 'session']),
+        ]
+
+    def __str__(self):
+        return f"{self.person.get_full_name()} - {self.roster.name} ({self.session.name}): {self.status}"
+
+
 class Session(models.Model):
     """Represents an attendance/recognition session"""
 
@@ -132,11 +223,19 @@ class Session(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    roster = models.ForeignKey(
+        Roster,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sessions',
+        help_text="Roster of expected people for this session"
+    )
     session_type = models.CharField(
         max_length=50,
         blank=True,
         null=True,
-        help_text="e.g., class, meeting, event"
+        help_text="e.g., class, meeting, event (deprecated, use roster instead)"
     )
     start_time = models.DateTimeField(db_index=True)
     end_time = models.DateTimeField(blank=True, null=True)
@@ -183,33 +282,6 @@ class Session(models.Model):
             'attendance_rate': (present / expected * 100) if expected > 0 else 0
         }
 
-
-class SessionExpectedPerson(models.Model):
-    """Links persons expected to attend a session"""
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    session = models.ForeignKey(
-        Session,
-        on_delete=models.CASCADE,
-        related_name='expected_persons',
-        db_index=True
-    )
-    person = models.ForeignKey(
-        Person,
-        on_delete=models.CASCADE,
-        related_name='expected_sessions',
-        db_index=True
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'session_expected_persons'
-        verbose_name = 'Session Expected Person'
-        verbose_name_plural = 'Session Expected Persons'
-        unique_together = ['session', 'person']
-
-    def __str__(self):
-        return f"{self.person.get_full_name()} expected at {self.session.name}"
 
 
 class Recognition(models.Model):
@@ -305,67 +377,116 @@ class AttendanceSummary(models.Model):
         return f"{self.person.get_full_name()} - {self.session.name}: {self.status}"
 
 
-# Signal handlers for auto-updating attendance summary
+# Signal handlers for auto-updating attendance
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 
 @receiver(post_save, sender=Recognition)
 def update_attendance_on_recognition(sender, instance, created, **kwargs):
-    """Update attendance summary when a person is recognized"""
+    """Update attendance records when a person is recognized"""
     if created:
         # Determine if late based on session start time
         is_late = instance.recognized_at > instance.session.start_time
+        status = 'late' if is_late else 'present'
 
+        # Update AttendanceSummary for backward compatibility
         AttendanceSummary.objects.update_or_create(
             session=instance.session,
             person=instance.person,
             defaults={
-                'status': 'late' if is_late else 'present',
+                'status': status,
                 'marked_at': instance.recognized_at
             }
         )
+        
+        # Update RosterAttendance if session has a roster
+        if instance.session.roster:
+            RosterAttendance.objects.update_or_create(
+                roster=instance.session.roster,
+                session=instance.session,
+                person=instance.person,
+                defaults={
+                    'status': status,
+                    'marked_at': instance.recognized_at
+                }
+            )
 
 
-@receiver(post_save, sender=SessionExpectedPerson)
+@receiver(post_save, sender=RosterAttendance)
 def create_absent_attendance_record(sender, instance, created, **kwargs):
-    """Create absent attendance record for expected persons"""
+    """Create absent attendance records for expected persons"""
     if created:
+        session = instance.session
+        person = instance.person
+        
         # Check if person was already recognized
         recognition_exists = Recognition.objects.filter(
-            session=instance.session,
-            person=instance.person
+            session=session,
+            person=person
         ).exists()
 
         if not recognition_exists:
+            # Create/update AttendanceSummary for backward compatibility
             AttendanceSummary.objects.get_or_create(
-                session=instance.session,
-                person=instance.person,
+                session=session,
+                person=person,
                 defaults={'status': 'absent'}
             )
+            
+            # Create/update RosterAttendance if session has a roster
+            if session.roster:
+                RosterAttendance.objects.get_or_create(
+                    roster=session.roster,
+                    session=session,
+                    person=person,
+                    defaults={'status': 'absent'}
+                )
 
 
 @receiver(post_delete, sender=Recognition)
 def mark_as_absent_on_recognition_delete(sender, instance, **kwargs):
     """Mark as absent when recognition is deleted"""
-    # Check if person is expected in this session
-    is_expected = SessionExpectedPerson.objects.filter(
-        session=instance.session,
-        person=instance.person
-    ).exists()
+    session = instance.session
+    person = instance.person
+    
+    # Only process if session has a roster
+    if not session.roster:
+        return
+    
+    # Check if person is expected in this session's roster
+    is_expected = session.roster.people.filter(id=person.id).exists()
 
     if is_expected:
+        # Update RosterAttendance to mark as absent
+        RosterAttendance.objects.update_or_create(
+            roster=session.roster,
+            session=session,
+            person=person,
+            defaults={'status': 'absent', 'marked_at': None}
+        )
+        
+        # Update AttendanceSummary for backward compatibility
         AttendanceSummary.objects.update_or_create(
-            session=instance.session,
-            person=instance.person,
+            session=session,
+            person=person,
             defaults={'status': 'absent', 'marked_at': None}
         )
     else:
-        # If not expected, delete the attendance record
-        AttendanceSummary.objects.filter(
-            session=instance.session,
-            person=instance.person
+        # If not expected, delete the attendance records
+        RosterAttendance.objects.filter(
+            roster=session.roster,
+            session=session,
+            person=person
         ).delete()
+        
+        AttendanceSummary.objects.filter(
+            session=session,
+            person=person
+        ).delete()
+
+
+
 class Event(models.Model):
     EVENT_TYPE_CHOICES = [
         ('face_detected', 'Face Detected'),

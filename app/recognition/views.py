@@ -16,6 +16,7 @@ from django.utils.dateparse import parse_datetime
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
+from django.db import ProgrammingError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from recognition.forms import PersonForm, SessionForm
@@ -26,11 +27,12 @@ from recognition.face_utils import (
 from recognition.models import (
     FaceEncoding,
     Session,
-    SessionExpectedPerson,
     AttendanceSummary,
     Event,
     Person,
     UnidentifiedFace,
+    Roster,
+    RosterAttendance,
 )
 from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
 import time
@@ -68,10 +70,21 @@ def split_full_name(full_name):
 
 
 def get_present_records(session):
-    return AttendanceSummary.objects.filter(
+    """Get present records for a session using its Roster attendance"""
+    if not session.roster:
+        # Fallback to AttendanceSummary if no roster is set
+        return AttendanceSummary.objects.filter(
+            session=session,
+            status__in=['present', 'late']
+        )
+    
+    # Get records from the session's roster attendance
+    return RosterAttendance.objects.filter(
+        roster=session.roster,
         session=session,
         status__in=['present', 'late']
-    )
+    ).select_related('person')
+
 
 
 def get_expected_count(session):
@@ -352,41 +365,48 @@ def get_person_detail(request, person_id):
 
 @api_view(['GET'])
 def list_rosters(request):
-    """Get all rosters (sessions with their expected people)"""
-    sessions = Session.objects.filter(
-        expected_persons__isnull=False
-    ).distinct().order_by('-created_at')
-    
-    rosters = []
-    for session in sessions:
-        expected_people = Person.objects.filter(expected_sessions__session=session)
-        rosters.append({
-            'session_id': session.id,
-            'name': session.name,
-            'description': session.description,
-            'session_type': session.session_type,
-            'people_count': expected_people.count(),
-            'created_at': isoformat_or_none(session.created_at)
+    """Get all rosters with their people count"""
+    try:
+        rosters = Roster.objects.all().order_by('-created_at')
+        
+        roster_data = [
+            {
+                'id': str(roster.id),
+                'name': roster.name,
+                'description': roster.description,
+                'people_count': roster.people.count(),
+                'created_at': isoformat_or_none(roster.created_at),
+                'created_by': roster.created_by.username if roster.created_by else None
+            }
+            for roster in rosters
+        ]
+        
+        return Response({
+            'status': 'ok',
+            'count': len(roster_data),
+            'rosters': roster_data
         })
-    
-    return Response({
-        'status': 'ok',
-        'count': len(rosters),
-        'rosters': rosters
-    })
+    except ProgrammingError:
+        # Table doesn't exist yet - migrations haven't been run
+        return Response({
+            'status': 'ok',
+            'count': 0,
+            'rosters': [],
+            'message': 'rosters table not yet initialized - run migrations'
+        })
 
 
 @csrf_exempt
 @api_view(['POST'])
 def create_roster(request):
     """
-    Create or update a roster for a session by setting expected people.
+    Create a new roster with a set of people.
     
     Request body:
     {
-        'session_id': 'uuid',
-        'person_ids': ['uuid1', 'uuid2', ...],
-        'replace': true/false  (optional, default: true)
+        'name': 'string (required)',
+        'description': 'string (optional)',
+        'person_ids': ['uuid1', 'uuid2', ...] (optional)
     }
     """
     try:
@@ -397,59 +417,215 @@ def create_roster(request):
             'message': 'Request body is not valid JSON'
         }, status=400)
     
-    session_id = data.get('session_id')
-    person_ids = data.get('person_ids', [])
-    replace = data.get('replace', True)
-    
-    if not session_id:
-        return JsonResponse({
-            'status': 'error',
-            'message': 'session_id is required'
-        }, status=400)
-    
-    if not isinstance(person_ids, list):
-        return JsonResponse({
-            'status': 'error',
-            'message': 'person_ids must be a list'
-        }, status=400)
-    
-    session = get_object_or_404(Session, id=session_id)
-    
-    # Filter out duplicates
-    unique_ids = list(dict.fromkeys(person_ids))
-    people = Person.objects.filter(id__in=unique_ids)
-    
-    if len(unique_ids) != people.count():
-        return JsonResponse({
-            'status': 'error',
-            'message': 'One or more person_ids were not found'
-        }, status=400)
-    
-    # Clear existing expected people if replace=True
-    if replace:
-        SessionExpectedPerson.objects.filter(session=session).delete()
-    
-    # Add new expected people
-    created_count = 0
-    for person in people:
-        _, created = SessionExpectedPerson.objects.get_or_create(
-            session=session,
-            person=person
+    try:
+        name = data.get('name', '').strip()
+        description = data.get('description', '').strip()
+        person_ids = data.get('person_ids', [])
+        
+        if not name:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'roster name is required'
+            }, status=400)
+        
+        # Check if roster with this name already exists
+        if Roster.objects.filter(name=name).exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Roster with name "{name}" already exists'
+            }, status=400)
+        
+        if not isinstance(person_ids, list):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'person_ids must be a list'
+            }, status=400)
+        
+        # Validate all person IDs exist
+        unique_ids = list(dict.fromkeys(person_ids))
+        people = Person.objects.filter(id__in=unique_ids)
+        
+        if len(unique_ids) != people.count():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'One or more person_ids were not found'
+            }, status=400)
+        
+        # Create roster
+        roster = Roster.objects.create(
+            name=name,
+            description=description,
+            created_by=request.user if request.user.is_authenticated else None
         )
-        if created:
-            created_count += 1
+        
+        # Add people to roster
+        if people:
+            roster.people.set(people)
+        
+        return Response({
+            'status': 'success',
+            'message': f'Roster "{name}" created successfully',
+            'roster': {
+                'id': str(roster.id),
+                'name': roster.name,
+                'description': roster.description,
+                'people_count': roster.people.count(),
+                'created_at': isoformat_or_none(roster.created_at)
+            }
+        }, status=201)
+    except ProgrammingError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Rosters table not initialized - run migrations first'
+        }, status=500)
+
+
+@api_view(['GET'])
+def get_roster_detail(request, roster_id):
+    """Get detailed information about a roster including its people"""
+    try:
+        roster = get_object_or_404(Roster, id=roster_id)
+    except ProgrammingError:
+        return Response({
+            'status': 'error',
+            'message': 'Rosters table not initialized - run migrations first'
+        }, status=500)
     
-    # Update expected_count on session
-    session.expected_count = get_expected_count(session)
-    session.save()
+    people = roster.people.all()
     
     return Response({
-        'status': 'success',
-        'session_id': str(session_id),
-        'created_count': created_count,
-        'total_expected': get_expected_count(session),
-        'message': f'Successfully added {created_count} person(s) to roster'
-    }, status=201)
+        'status': 'ok',
+        'roster': {
+            'id': str(roster.id),
+            'name': roster.name,
+            'description': roster.description,
+            'created_at': isoformat_or_none(roster.created_at),
+            'created_by': roster.created_by.username if roster.created_by else None,
+            'people_count': people.count()
+        },
+        'people': [
+            {
+                'id': str(person.id),
+                'name': person.get_full_name(),
+                'identification_number': person.identification_number,
+                'email': person.email,
+                'status': person.status
+            }
+            for person in people
+        ]
+    })
+
+
+@csrf_exempt
+@api_view(['POST', 'PUT'])
+def update_roster(request, roster_id):
+    """
+    Update an existing roster.
+    
+    Request body:
+    {
+        'name': 'string (optional)',
+        'description': 'string (optional)',
+        'person_ids': ['uuid1', 'uuid2', ...] (optional),
+        'replace_people': true/false (default: true - replace all, false - merge)
+    }
+    """
+    try:
+        roster = get_object_or_404(Roster, id=roster_id)
+        
+        data = json.loads(request.body)
+        
+        # Update name if provided
+        if 'name' in data:
+            name = data['name'].strip()
+            if not name:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'name cannot be empty'
+                }, status=400)
+            
+            # Check if another roster with this name exists
+            if Roster.objects.filter(name=name).exclude(id=roster_id).exists():
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Roster with name "{name}" already exists'
+                }, status=400)
+            
+            roster.name = name
+        
+        # Update description if provided
+        if 'description' in data:
+            roster.description = data['description']
+        
+        # Update people if provided
+        if 'person_ids' in data:
+            person_ids = data['person_ids']
+            if not isinstance(person_ids, list):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'person_ids must be a list'
+                }, status=400)
+            
+            unique_ids = list(dict.fromkeys(person_ids))
+            people = Person.objects.filter(id__in=unique_ids)
+            
+            if len(unique_ids) != people.count():
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'One or more person_ids were not found'
+                }, status=400)
+            
+            replace_people = data.get('replace_people', True)
+            
+            if replace_people:
+                roster.people.set(people)
+            else:
+                roster.people.add(*people)
+        
+        roster.save()
+        
+        return Response({
+            'status': 'success',
+            'message': f'Roster "{roster.name}" updated successfully',
+            'roster': {
+                'id': str(roster.id),
+                'name': roster.name,
+                'description': roster.description,
+                'people_count': roster.people.count(),
+                'updated_at': isoformat_or_none(roster.updated_at)
+            }
+        })
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Request body is not valid JSON'
+        }, status=400)
+    except ProgrammingError:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Rosters table not initialized - run migrations first'
+        }, status=500)
+
+
+@api_view(['DELETE'])
+def delete_roster(request, roster_id):
+    """Delete a roster"""
+    try:
+        roster = get_object_or_404(Roster, id=roster_id)
+        roster_name = roster.name
+        roster.delete()
+        
+        return Response({
+            'status': 'success',
+            'message': f'Roster "{roster_name}" deleted successfully'
+        })
+    except ProgrammingError:
+        return Response({
+            'status': 'error',
+            'message': 'Rosters table not initialized - run migrations first'
+        }, status=500)
+
+
 
 @api_view(['GET'])
 def index(request):
@@ -648,6 +824,15 @@ def create_session_view(request):
             session = form.save(commit=False)
             session.created_by = request.user
             session.save()
+            
+            # If a roster was selected, populate expected_persons from roster
+            if session.roster:
+                # Clear any existing expected persons
+                SessionExpectedPerson.objects.filter(session=session).delete()
+                
+                # Add all people from the roster as expected persons
+                for person in session.roster.people.all():
+                    SessionExpectedPerson.objects.create(session=session, person=person)
 
             return JsonResponse({
                 'status': 'success',
@@ -656,6 +841,8 @@ def create_session_view(request):
                     'id': str(session.id),
                     'name': session.name,
                     'description': session.description,
+                    'roster_id': str(session.roster.id) if session.roster else None,
+                    'roster_name': session.roster.name if session.roster else None,
                     'session_type': session.session_type,
                     'expected_count': get_expected_count(session),
                     'status': session.status,
@@ -672,18 +859,26 @@ def create_session_view(request):
             }, status=400)
     else:
         # GET – return the expected shape so clients know what to send
+        try:
+            available_rosters = list(Roster.objects.all().values('id', 'name'))
+        except ProgrammingError:
+            # Table doesn't exist yet - migrations haven't been run
+            available_rosters = []
+        
         return JsonResponse({
             'status': 'ok',
             'message': 'POST JSON data to create a new session',
             'required_fields': {
                 'name': 'string (required)',
                 'description': 'string (optional)',
-                'session_type': 'string (optional)',
+                'roster': 'uuid (optional) - select a roster of expected people',
+                'session_type': 'string (optional, deprecated)',
                 'start_time': 'datetime (required)',
                 'end_time': 'datetime (optional)',
                 'expected_count': 'integer (optional)',
                 'status': 'scheduled | in_progress | completed | cancelled (optional)'
-            }
+            },
+            'available_rosters': available_rosters
         })
 
 def sessions_list(request):
@@ -704,6 +899,8 @@ def sessions_list(request):
             'id': session.id,
             'name': session.name,
             'description': session.description,
+            'roster_id': str(session.roster.id) if session.roster else None,
+            'roster_name': session.roster.name if session.roster else None,
             'session_type': session.session_type,
             'status': session.status,
             'created_at': isoformat_or_none(session.created_at),
@@ -767,6 +964,8 @@ def session_detail(request, session_id):
             'id': session.id,
             'name': session.name,
             'description': session.description,
+            'roster_id': str(session.roster.id) if session.roster else None,
+            'roster_name': session.roster.name if session.roster else None,
             'session_type': session.session_type,
             'expected_count': expected_count,
             'status': session.status,
