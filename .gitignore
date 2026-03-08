@@ -182,3 +182,5 @@ app/media/uploads/unidentified/*
 
 
 app/media/*
+app/staticfiles/*
+staticfiles/*
