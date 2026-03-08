@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Sign Up - FaceTrack Lite{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-6 mx-auto">
+            <div class="card">
+                <div class="card-body p-5">
+                    <!-- Header -->
+                    <h2 class="card-title text-center mb-1">Create Account</h2>
+                    <p class="text-center text-muted mb-4">Join FaceTrack Lite and start using face recognition</p>
+
+                    <!-- Form Errors -->
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-4">
+                        <h5>Registration Errors:</h5>
+                        {% for error in form.non_field_errors %}
+                        <p class="mb-2">• {{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Signup Form -->
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+
+                        <!-- Username -->
+                        <div class="mb-3">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">
+                                {{ form.username.label }} <span style="color: red;">*</span>
+                            </label>
+                            <input type="text" class="form-control {% if form.username.errors %}is-invalid{% endif %}" 
+                                   id="{{ form.username.id_for_label }}" name="username" 
+                                   value="{{ form.username.value|default:'' }}" required>
+                            {% if form.username.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.username.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block mt-1">
+                                150 characters or fewer. Letters, digits and @/./+/-/_ only.
+                            </small>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="mb-3">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">
+                                {{ form.email.label }} <span style="color: red;">*</span>
+                            </label>
+                            <input type="email" class="form-control {% if form.email.errors %}is-invalid{% endif %}" 
+                                   id="{{ form.email.id_for_label }}" name="email" 
+                                   value="{{ form.email.value|default:'' }}" required>
+                            {% if form.email.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.email.errors.0 }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Full Name -->
+                        <div class="mb-3">
+                            <label for="{{ form.full_name.id_for_label }}" class="form-label">
+                                {{ form.full_name.label }} <span style="color: red;">*</span>
+                            </label>
+                            <input type="text" class="form-control {% if form.full_name.errors %}is-invalid{% endif %}" 
+                                   id="{{ form.full_name.id_for_label }}" name="full_name" 
+                                   value="{{ form.full_name.value|default:'' }}" required>
+                            {% if form.full_name.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.full_name.errors.0 }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Role Selection -->
+                        <fieldset class="mb-4 p-3 border rounded" style="background-color: #f8f9fa;">
+                            <legend class="float-none w-auto">Account Type <span style="color: red;">*</span></legend>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="{{ form.is_student.id_for_label }}" 
+                                       name="is_student" {% if form.is_student.value %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ form.is_student.id_for_label }}">
+                                    👤 Student
+                                </label>
+                                <small class="form-text text-muted d-block">
+                                    Check if you are a student
+                                </small>
+                            </div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="{{ form.is_teacher.id_for_label }}" 
+                                       name="is_teacher" {% if form.is_teacher.value %}checked{% endif %}>
+                                <label class="form-check-label" for="{{ form.is_teacher.id_for_label }}">
+                                    👨‍🏫 Teacher/Instructor
+                                </label>
+                                <small class="form-text text-muted d-block">
+                                    Check if you are a teacher or instructor
+                                </small>
+                            </div>
+                        </fieldset>
+
+                        <!-- Password -->
+                        <div class="mb-3">
+                            <label for="{{ form.password1.id_for_label }}" class="form-label">
+                                {{ form.password1.label }} <span style="color: red;">*</span>
+                            </label>
+                            <input type="password" class="form-control {% if form.password1.errors %}is-invalid{% endif %}" 
+                                   id="{{ form.password1.id_for_label }}" name="password1" required>
+                            {% if form.password1.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.password1.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block mt-2">
+                                <strong>Password requirements:</strong>
+                                <ul class="mb-0 ps-3">
+                                    <li>At least 8 characters long</li>
+                                    <li>Cannot be entirely numeric</li>
+                                    <li>Cannot be a common password</li>
+                                </ul>
+                            </small>
+                        </div>
+
+                        <!-- Confirm Password -->
+                        <div class="mb-4">
+                            <label for="{{ form.password2.id_for_label }}" class="form-label">
+                                {{ form.password2.label }} <span style="color: red;">*</span>
+                            </label>
+                            <input type="password" class="form-control {% if form.password2.errors %}is-invalid{% endif %}" 
+                                   id="{{ form.password2.id_for_label }}" name="password2" required>
+                            {% if form.password2.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.password2.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block mt-1">
+                                Enter the same password for verification
+                            </small>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary w-100 btn-lg mb-3">
+                            Create Account
+                        </button>
+                    </form>
+
+                    <!-- Divider -->
+                    <hr class="my-4">
+
+                    <!-- Login Link -->
+                    <p class="text-center text-muted mb-0">
+                        Already have an account? 
+                        <a href="{% url 'users:login' %}" class="fw-bold text-decoration-none">
+                            Sign in here
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control {
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+        padding: 10px 15px;
+        font-size: 1rem;
+    }
+
+    .form-control:focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+
+    .form-control.is-invalid {
+        border-color: #dc3545;
+    }
+
+    .form-control.is-invalid:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+
+    .invalid-feedback {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+
+    .form-check-input {
+        width: 1.25em;
+        height: 1.25em;
+        margin-top: 0.3125em;
+    }
+
+    .form-check-input:checked {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+
+    .form-check {
+        padding-left: 0;
+        margin-left: 1.5em;
+    }
+
+    .form-check-label {
+        margin-left: 0.5em;
+    }
+
+    .card {
+        border-radius: 10px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    fieldset {
+        border-radius: 8px;
+    }
+
+    legend {
+        font-size: 1rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}

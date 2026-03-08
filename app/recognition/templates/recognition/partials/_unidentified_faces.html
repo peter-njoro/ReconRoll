@@ -1,0 +1,83 @@
+<!-- Unidentified Faces Gallery Partial -->
+
+{% if unidentified_faces %}
+<div class="unidentified-faces-gallery">
+    <div class="row g-3">
+        {% for face in unidentified_faces %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100 overflow-hidden">
+                <!-- Face Image -->
+                <div class="position-relative bg-dark" style="height: 250px; overflow: hidden;">
+                    {% if face.cropped_face %}
+                    <img src="{{ face.cropped_face.url }}" alt="Unidentified Face" 
+                         class="img-fluid w-100 h-100" style="object-fit: cover; object-position: center;">
+                    {% else %}
+                    <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                        <div class="text-center">
+                            <p class="mb-0">❓ No image available</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Badge overlay -->
+                    <div class="position-absolute top-0 end-0 m-2">
+                        <span class="badge bg-danger">Unknown</span>
+                    </div>
+                </div>
+
+                <!-- Face Info -->
+                <div class="card-body p-3">
+                    <div class="mb-2">
+                        <small class="text-muted d-block">
+                            <strong>ID:</strong>
+                            <code class="user-select-all">{{ face.id|slice:":8" }}...</code>
+                        </small>
+                    </div>
+
+                    <div class="mb-2">
+                        <small class="text-muted d-block">
+                            <strong>⏰ Detected:</strong> 
+                            {% if face.detected_at %}
+                            {{ face.detected_at|date:"H:i:s" }}
+                            {% else %}
+                            {{ face.timestamp|date:"H:i:s" }}
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    {% if face.full_frame %}
+                    <a href="{{ face.full_frame.url }}" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                        🖼️ View Full Frame
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .unidentified-faces-gallery {
+        padding: 10px 0;
+    }
+
+    .unidentified-faces-gallery .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .unidentified-faces-gallery .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.15) !important;
+    }
+
+    .unidentified-faces-gallery img {
+        display: block;
+    }
+</style>
+
+{% else %}
+<div class="text-center py-4 text-muted">
+    ❓ No unknown faces detected. All detected faces were recognized!
+</div>
+{% endif %}

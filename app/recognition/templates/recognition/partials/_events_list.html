@@ -1,0 +1,60 @@
+<!-- Events List Partial -->
+
+{% if events %}
+<div class="timeline">
+    {% for event in events %}
+    <div class="event-item {{ event.severity }}">
+        <div class="event-time">
+            📅 {{ event.timestamp|date:"d M Y H:i:s" }}
+            <span class="badge bg-secondary ms-2">{{ event.get_event_type_display }}</span>
+        </div>
+        <div class="mt-2">{{ event.message }}</div>
+        {% if event.student %}
+        <small class="text-muted mt-2 d-block">
+            👤 Student: <strong>{{ event.student.full_name }}</strong> ({{ event.student.registration_number }})
+        </small>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-4 text-muted">
+    📋 No events recorded yet
+</div>
+{% endif %}
+
+<style>
+    .event-item {
+        padding: 12px 15px;
+        border-left: 3px solid #dee2e6;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    
+    .event-item.info {
+        border-left-color: #17a2b8;
+        background-color: #d1ecf1;
+    }
+    
+    .event-item.warning {
+        border-left-color: #ffc107;
+        background-color: #fff3cd;
+    }
+    
+    .event-item.error {
+        border-left-color: #dc3545;
+        background-color: #f8d7da;
+    }
+    
+    .event-item.critical {
+        border-left-color: #dc3545;
+        background-color: #f8d7da;
+        font-weight: 600;
+    }
+    
+    .event-time {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: 600;
+    }
+</style>

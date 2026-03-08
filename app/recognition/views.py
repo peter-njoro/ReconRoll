@@ -71,62 +71,87 @@ def enroll_view(request):
         progress_key = f"enroll_progress_{request.session.session_key}"
         cache.set(progress_key, 0, timeout=600)
 
-        # Validate uploaded images
+        # Validate uploaded images exist
         if not face_images:
             form.add_error(None, 'Please upload at least one image file.')
 
-        if form.is_valid():
+        # Only process if form is valid and images exist
+        if form.is_valid() and face_images:
+            # First pass: validate all images and collect encodings
             ref_encoding = None
             valid_encodings = []
             total = len(face_images)
+            encoding_errors = []
+            
             for idx, image in enumerate(face_images):
-                img_bytes = image.read()
-                np_arr = np.frombuffer(img_bytes, np.uint8)
-                img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                try:
+                    img_bytes = image.read()
+                    np_arr = np.frombuffer(img_bytes, np.uint8)
+                    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-                face_locations, encodings = get_face_encodings(img)
+                    face_locations, encodings = get_face_encodings(img)
 
-                if not encodings:
-                    form.add_error(None, f"No face detected in image: {image.name}")
-                    continue
-                elif len(encodings) > 1:
-                    form.add_error(None, f"Multiple faces detected in image: {image.name}")
-                    continue
-
-                encoding = encodings[0]
-
-                if ref_encoding is None:
-                    ref_encoding = encoding
-                else:
-                    matches = face_recognition.compare_faces([ref_encoding], encoding, tolerance=TOLERANCE)
-                    if not matches[0]:
-                        form.add_error(None, f"Face in image {image.name} does not match the first face.")
+                    if not encodings:
+                        encoding_errors.append(f"No face detected in image: {image.name}")
+                        continue
+                    elif len(encodings) > 1:
+                        encoding_errors.append(f"Multiple faces detected in image: {image.name}")
                         continue
 
-                valid_encodings.append((image.name, encodings[0]))
+                    encoding = encodings[0]
+
+                    if ref_encoding is None:
+                        ref_encoding = encoding
+                    else:
+                        matches = face_recognition.compare_faces([ref_encoding], encoding, tolerance=TOLERANCE)
+                        if not matches[0]:
+                            encoding_errors.append(f"Face in image {image.name} does not match the first face.")
+                            continue
+
+                    valid_encodings.append((image.name, encodings[0]))
+                except Exception as e:
+                    encoding_errors.append(f"Error processing image {image.name}: {str(e)}")
+                    continue
 
                 # Update progress in cache
                 cache.set(progress_key, int((idx + 1) / total * 100), timeout=600)
 
-            # Only save the form if we have valid encodings AND no errors
-            if valid_encodings and not form.errors:
+            # Second pass: only save if all validation passed
+            if valid_encodings and not encoding_errors:
+                # Save student first
                 student = form.save()
-                for image_name, encoding in valid_encodings:
-                    filename = f"{uuid.uuid4()}.npy"
-                    path = os.path.join('recognition/uploads/faces', filename)
-                    abs_path = os.path.join(settings.BASE_DIR, path)
-                    np.save(abs_path, encoding)
+                
+                try:
+                    # Save all face encodings
+                    for image_name, encoding in valid_encodings:
+                        filename = f"{uuid.uuid4()}.npy"
+                        path = os.path.join('recognition/uploads/faces', filename)
+                        abs_path = os.path.join(settings.BASE_DIR, path)
+                        
+                        # Create the directory if it doesn't exist
+                        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                        
+                        np.save(abs_path, encoding)
 
-                    FaceEncoding.objects.create(
-                        student=student,
-                        file_path=path,
-                        notes=f"Encoding from {image_name}"
-                    )
-
-                return redirect('recognition:enroll_success')
+                        FaceEncoding.objects.create(
+                            student=student,
+                            file_path=path,
+                            notes=f"Encoding from {image_name}"
+                        )
+                    
+                    return redirect('recognition:enroll_success')
+                
+                except Exception as e:
+                    # If saving encodings fails, delete the student to maintain data consistency
+                    student.delete()
+                    form.add_error(None, f'Error saving face encodings: {str(e)}')
             else:
-                if not valid_encodings:
-                    form.add_error(None, 'No valid encodings were saved.')
+                # Add all encoding errors to the form
+                for error in encoding_errors:
+                    form.add_error(None, error)
+                
+                if not valid_encodings and not encoding_errors:
+                    form.add_error(None, 'No valid face encodings could be extracted from the images.')
 
         # Reset progress on finish
         cache.set(progress_key, 100, timeout=600)
@@ -312,9 +337,33 @@ def session_absent_students_partial(request, session_id):
 
 def session_unidentified_faces_partial(request, session_id):
     session = get_object_or_404(Session, id=session_id)
-    unidentified_faces = session.unidentified_faces.all()
+    # Order by most recent first (descending by timestamp)
+    unidentified_faces = session.unidentified_faces.all().order_by('-timestamp')
     html = render_to_string('recognition/partials/_unidentified_faces.html', {'unidentified_faces': unidentified_faces})
     return HttpResponse(html)
+
+@login_required
+def session_unidentified_faces_api(request, session_id):
+    """JSON API endpoint for unidentified faces - for real-time JavaScript updates"""
+    session = get_object_or_404(Session, id=session_id)
+    unidentified_faces = session.unidentified_faces.all().order_by('-timestamp')
+    
+    faces_data = []
+    for face in unidentified_faces:
+        faces_data.append({
+            'id': str(face.id),
+            'cropped_face_url': face.cropped_face.url if face.cropped_face else None,
+            'full_frame_url': face.full_frame.url if face.full_frame else None,
+            'timestamp': face.timestamp.isoformat(),
+            'detected_at': face.detected_at.isoformat() if face.detected_at else face.timestamp.isoformat(),
+        })
+    
+    return JsonResponse({
+        'success': True,
+        'session_id': str(session.id),
+        'faces': faces_data,
+        'count': len(faces_data)
+    })
 
 def record_event(session, message, event_type='info'):
     Event.objects.create(session=session, message=message, event_type=event_type)
@@ -368,12 +417,13 @@ def end_session_view(request, session_id):
 def sessions_list(request):
     sessions = Session.objects.all().order_by('-start_time')
     
-    # Get active session information
+    # Get active session information - create a dict for quick lookup
     active_session_info = {}
     for session_id, session_data in active_recognition.items():
         try:
             session_obj = Session.objects.get(id=session_id)
-            active_session_info[str(session_id)] = {
+            session_id_str = str(session_id)
+            active_session_info[session_id_str] = {
                 'is_active': session_data.get("thread") and session_data["thread"].is_alive(),
                 'mode': session_data.get("mode", "unknown")
             }
@@ -381,9 +431,18 @@ def sessions_list(request):
             # Clean up invalid entries
             active_recognition.pop(session_id, None)
     
+    # Create lists of active/dev session IDs for easy template checking
+    active_session_ids = list(active_session_info.keys())
+    dev_mode_session_ids = [
+        sid for sid, info in active_session_info.items() 
+        if info.get('mode') == 'dev'
+    ]
+    
     context = {
         'sessions': sessions,
-        'active_session_info': active_session_info
+        'active_session_ids': active_session_ids,
+        'dev_mode_session_ids': dev_mode_session_ids,
+        'active_session_info': active_session_info  # Keep for backward compatibility
     }
     return render(request, 'recognition/session_list.html', context)
 

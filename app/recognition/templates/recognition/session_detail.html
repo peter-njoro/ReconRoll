@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+
+{% block title %}{{ session.subject }} - Session Details{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tab-content {
+        border-left: 1px solid #dee2e6;
+        border-right: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+        border-radius: 0 0 8px 8px;
+        padding: 20px;
+    }
+    
+    .nav-tabs {
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .nav-tabs .nav-link {
+        border: 1px solid #dee2e6;
+        border-bottom: none;
+        color: #333;
+    }
+    
+    .nav-tabs .nav-link.active {
+        background-color: #fff;
+        border-color: #dee2e6;
+        border-bottom: 1px solid #fff;
+    }
+    
+    .session-stats {
+        text-align: center;
+        padding: 15px;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    .student-item {
+        padding: 10px 15px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .student-item:last-child {
+        border-bottom: none;
+    }
+    
+    .event-item {
+        padding: 10px 15px;
+        border-left: 3px solid #dee2e6;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    
+    .event-item.info {
+        border-left-color: #17a2b8;
+        background-color: #d1ecf1;
+    }
+    
+    .event-item.warning {
+        border-left-color: #ffc107;
+        background-color: #fff3cd;
+    }
+    
+    .event-item.error {
+        border-left-color: #dc3545;
+        background-color: #f8d7da;
+    }
+    
+    .event-time {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: 600;
+    }
+    
+    .mode-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .mode-dev {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .mode-prod {
+        background-color: #d4edda;
+        color: #155724;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- Session Header -->
+            <div class="card mb-4 position-relative">
+                {% if is_dev_mode %}
+                <div class="mode-badge mode-dev">🔧 DEV MODE</div>
+                {% else %}
+                <div class="mode-badge mode-prod">✓ PRODUCTION</div>
+                {% endif %}
+                
+                <div class="card-body">
+                    <h1 class="card-title mb-2">{{ session.subject }}</h1>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>Status:</strong> 
+                                <span class="session-status status-{{ session.status }}">
+                                    {% if session.status == 'ongoing' %}🔴 Ongoing{% else %}⏹️ Ended{% endif %}
+                                </span>
+                            </p>
+                            <p class="mb-1"><strong>Started:</strong> {{ session.start_time|date:"d M Y H:i:s" }}</p>
+                            {% if session.end_time %}
+                            <p class="mb-1"><strong>Ended:</strong> {{ session.end_time|date:"d M Y H:i:s" }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>Created by:</strong> {{ session.created_by.username }}</p>
+                            {% if session.class_group %}
+                            <p class="mb-1"><strong>Class Group:</strong> {{ session.class_group.name }}</p>
+                            {% endif %}
+                            {% if session.notes %}
+                            <p class="mb-1"><strong>Notes:</strong> {{ session.notes }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-2">
+                        {% if session.status == 'ongoing' %}
+                        <a href="{% url 'recognition:end_session' session.id %}" class="btn btn-danger" 
+                           onclick="return confirm('Are you sure you want to end this session?');">
+                            ⏹️ End Session
+                        </a>
+                        {% else %}
+                        <a href="{% url 'recognition:start_session' session.id %}" class="btn btn-success">
+                            ▶️ Start Recognition
+                        </a>
+                        {% if is_dev_mode %}
+                        <a href="{% url 'recognition:start_session' session.id %}?dev=1" class="btn btn-warning">
+                            🔧 Start (DEV Mode)
+                        </a>
+                        {% endif %}
+                        {% endif %}
+                        <a href="{% url 'recognition:sessions_list' %}" class="btn btn-secondary">
+                            ← Back to Sessions
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="session-stats">
+                        <div class="stat-number" id="presentCount">{{ present_students|length }}</div>
+                        <div class="stat-label">Present</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="session-stats">
+                        <div class="stat-number" id="abscentCount">{{ absent_students|length }}</div>
+                        <div class="stat-label">Absent</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="session-stats">
+                        <div class="stat-number" id="unknownCount">{{ unidentified_faces|length }}</div>
+                        <div class="stat-label">Unknown Faces</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="session-stats">
+                        <div class="stat-number" id="eventCount">{{ events|length }}</div>
+                        <div class="stat-label">Events</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabs for Tables -->
+            <div class="card">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="present-tab" data-bs-toggle="tab" data-bs-target="#present" type="button">
+                            ✅ Present ({{ present_students|length }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="absent-tab" data-bs-toggle="tab" data-bs-target="#absent" type="button">
+                            ❌ Absent ({{ absent_students|length }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="unknown-tab" data-bs-toggle="tab" data-bs-target="#unknown" type="button">
+                            ❓ Unknown ({{ unidentified_faces|length }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="events-tab" data-bs-toggle="tab" data-bs-target="#events" type="button">
+                            📋 Events ({{ events|length }})
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Present Students Tab -->
+                    <div class="tab-pane fade show active" id="present" role="tabpanel">
+                        <div id="presentStudentsList" hx-get="{% url 'recognition:session_present_students_partial' session.id %}"
+                             hx-trigger="load, presentUpdated from:body">
+                            {% if present_students %}
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Student Name</th>
+                                            <th>Registration #</th>
+                                            <th>Recognition Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for student in present_students %}
+                                        <tr>
+                                            <td>{{ student.full_name }}</td>
+                                            <td><span class="badge bg-info">{{ student.registration_number }}</span></td>
+                                            <td>
+                                                {% for record in session.attendance_records.all %}
+                                                    {% if record.student_id == student.id %}
+                                                    {{ record.timestamp|date:"H:i:s" }}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                No students present yet
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Absent Students Tab -->
+                    <div class="tab-pane fade" id="absent" role="tabpanel">
+                        <div id="absentStudentsList" hx-get="{% url 'recognition:session_absent_students_partial' session.id %}"
+                             hx-trigger="load, absentUpdated from:body">
+                            {% if absent_students %}
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Student Name</th>
+                                            <th>Registration #</th>
+                                            <th>Course</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for student in absent_students %}
+                                        <tr>
+                                            <td>{{ student.full_name }}</td>
+                                            <td><span class="badge bg-danger">{{ student.registration_number }}</span></td>
+                                            <td>{{ student.course }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                No absent students
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Unknown Faces Tab -->
+                    <div class="tab-pane fade" id="unknown" role="tabpanel">
+                        <div id="unknownFacesList">
+                            <div class="row g-3" id="unknownFacesGallery">
+                                <div class="col-12">
+                                    <div class="text-center py-4 text-muted">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        <p class="mt-2">Loading faces...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Events Tab -->
+                    <div class="tab-pane fade" id="events" role="tabpanel">
+                        <div id="eventsList" hx-get="{% url 'recognition:session_events_partial' session.id %}"
+                             hx-trigger="load, eventsUpdated from:body" hx-swap="innerHTML">
+                            {% if events %}
+                            <div class="timeline">
+                                {% for event in events %}
+                                <div class="event-item {{ event.severity }}">
+                                    <div class="event-time">
+                                        📅 {{ event.timestamp|date:"d M Y H:i:s" }}
+                                        <span class="badge bg-secondary ms-2">{{ event.get_event_type_display }}</span>
+                                    </div>
+                                    <div class="mt-2">{{ event.message }}</div>
+                                    {% if event.student %}
+                                    <small class="text-muted mt-2 d-block">Student: <strong>{{ event.student.full_name }}</strong></small>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4 text-muted">
+                                No events recorded yet
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Load unidentified faces in real-time
+function loadUnidentifiedFaces() {
+    const sessionId = '{{ session.id }}';
+    const apiUrl = `/session/${sessionId}/unidentified_faces_api/`;
+    
+    fetch(apiUrl)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to fetch faces');
+            return response.json();
+        })
+        .then(data => {
+            const gallery = document.getElementById('unknownFacesGallery');
+            const unknownCount = document.getElementById('unknownCount');
+            
+            if (data.faces && data.faces.length > 0) {
+                gallery.innerHTML = ''; // Clear existing
+                unknownCount.textContent = data.count;
+                
+                // Create image cards for each face
+                data.faces.forEach((face, index) => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-6 col-lg-4';
+                    
+                    const card = document.createElement('div');
+                    card.className = 'card border-0 shadow-sm h-100 overflow-hidden';
+                    
+                    let imageHtml = '';
+                    if (face.cropped_face_url) {
+                        imageHtml = `
+                            <div class="position-relative bg-dark" style="height: 250px; overflow: hidden;">
+                                <img src="${face.cropped_face_url}" 
+                                     alt="Unidentified Face ${index + 1}"
+                                     class="img-fluid w-100 h-100" 
+                                     style="object-fit: cover; object-position: center;"
+                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=&quot;d-flex align-items-center justify-content-center h-100 text-muted&quot;><div class=&quot;text-center&quot;><p class=&quot;mb-0&quot;>❌ Image failed to load</p></div></div>'">
+                                <div class="position-absolute top-0 end-0 m-2">
+                                    <span class="badge bg-danger">Unknown</span>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        imageHtml = `
+                            <div class="position-relative bg-dark" style="height: 250px; overflow: hidden;">
+                                <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                                    <div class="text-center">
+                                        <p class="mb-0">❓ No image available</p>
+                                    </div>
+                                </div>
+                                <div class="position-absolute top-0 end-0 m-2">
+                                    <span class="badge bg-danger">Unknown</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    const bodyHtml = `
+                        <div class="card-body p-3">
+                            <div class="mb-2">
+                                <small class="text-muted d-block">
+                                    <strong>ID:</strong>
+                                    <code class="user-select-all">${face.id.substring(0, 8)}...</code>
+                                </small>
+                            </div>
+                            <div class="mb-2">
+                                <small class="text-muted d-block">
+                                    <strong>⏰ Detected:</strong>
+                                    ${new Date(face.detected_at).toLocaleTimeString()}
+                                </small>
+                            </div>
+                            ${face.full_frame_url ? `
+                                <a href="${face.full_frame_url}" target="_blank" class="btn btn-sm btn-outline-primary w-100">
+                                    🖼️ View Full Frame
+                                </a>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    card.innerHTML = imageHtml + bodyHtml;
+                    col.appendChild(card);
+                    gallery.appendChild(col);
+                });
+            } else {
+                gallery.innerHTML = `
+                    <div class="col-12">
+                        <div class="text-center py-4 text-muted">
+                            No unknown faces detected
+                        </div>
+                    </div>
+                `;
+                unknownCount.textContent = '0';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading unidentified faces:', error);
+            const gallery = document.getElementById('unknownFacesGallery');
+            gallery.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-warning">
+                        Error loading faces: ${error.message}
+                    </div>
+                </div>
+            `;
+        });
+}
+
+// Load faces on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadUnidentifiedFaces();
+});
+
+// Auto-refresh statistics if session is ongoing
+{% if session.status == 'ongoing' %}
+setInterval(function() {
+    fetch('{% url "recognition:session_status" session.id %}')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('presentCount').textContent = data.present_count;
+            document.getElementById('unknownCount').textContent = data.unknown_count;
+            
+            // Load unidentified faces
+            loadUnidentifiedFaces();
+            
+            // Trigger HTMX updates for lists (if using HTMX for other sections)
+            if (typeof htmx !== 'undefined') {
+                htmx.trigger('#presentStudentsList', 'presentUpdated');
+                htmx.trigger('#absentStudentsList', 'absentUpdated');
+                htmx.trigger('#eventsList', 'eventsUpdated');
+            }
+        })
+        .catch(error => console.error('Error updating data:', error));
+}, 2000); // Update every 2 seconds
+{% endif %}
+</script>
+{% endblock %}

@@ -117,7 +117,7 @@ def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
                 if not dev_mode:
                     if idx == -1:  # brand new unknown
                         cropped_path, full_path, saved_encoding = save_unidentified_faces(
-                            frame, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
+                            frame, face_locations[i], session=session, encoding=face_encoding
                         )
                         if cropped_path and full_path:
                             UnidentifiedFace.objects.create(

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Enrollment Successful - FaceTrack Lite{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-6 mx-auto">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center py-5">
+                    <!-- Success Icon -->
+                    <div style="font-size: 5rem; margin-bottom: 20px;">
+                        ✅
+                    </div>
+
+                    <!-- Message -->
+                    <h2 class="card-title mb-3">Enrollment Successful!</h2>
+                    <p class="card-text text-muted lead mb-4">
+                        The student has been successfully enrolled in the face recognition system.
+                    </p>
+
+                    <!-- Additional Info -->
+                    <div class="alert alert-info text-start mb-4">
+                        <p class="mb-2"><strong>What happens next?</strong></p>
+                        <ul class="mb-0 ps-3">
+                            <li>The student's face encodings have been saved</li>
+                            <li>They can now be recognized in attendance sessions</li>
+                            <li>You can enroll more students or start a session</li>
+                        </ul>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'recognition:enroll' %}" class="btn btn-primary btn-lg mb-2">
+                            Enroll Another Student
+                        </a>
+                        <a href="{% url 'recognition:create_session' %}" class="btn btn-success btn-lg mb-2">
+                            Create New Session
+                        </a>
+                        <a href="{% url 'recognition:index' %}" class="btn btn-secondary btn-lg">
+                            Back to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

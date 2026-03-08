@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Sessions List - FaceTrack Lite{% endblock %}
+
+{% block extra_css %}
+<style>
+    .session-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .session-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+    }
+    
+    .session-status-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .status-ongoing {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .status-ended {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .status-ready {
+        background-color: #d1ecf1;
+        color: #0c5460;
+    }
+    
+    .session-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin: 15px 0;
+        font-size: 0.95rem;
+    }
+    
+    .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .meta-item strong {
+        color: #333;
+    }
+    
+    .meta-item span {
+        color: #6c757d;
+    }
+    
+    .session-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+    }
+    
+    .active-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: #28a745;
+        animation: pulse 2s infinite;
+        margin-right: 5px;
+    }
+    
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+        }
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+    }
+    
+    .filter-section {
+        margin-bottom: 30px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <!-- Page Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>📊 Sessions</h1>
+                <a href="{% url 'recognition:create_session' %}" class="btn btn-primary">
+                    + New Session
+                </a>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="filter-section">
+                <h5 class="mb-3">Quick Stats</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="bg-white p-3 rounded">
+                            <div style="font-size: 1.5rem; font-weight: bold;">{{ sessions|length }}</div>
+                            <small class="text-muted">Total Sessions</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="bg-white p-3 rounded">
+                            <div style="font-size: 1.5rem; font-weight: bold;">
+                                {% if active_session_info %}
+                                    {% widthratio active_session_info|length 1 1 %}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Active Sessions</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="bg-white p-3 rounded">
+                            <div style="font-size: 1.5rem; font-weight: bold;">
+                                {% if sessions %}
+                                    {% widthratio sessions|length 1 1 %}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Completed Sessions</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{% url 'recognition:stop_all_sessions' %}" class="btn btn-warning btn-sm w-100"
+                           onclick="return confirm('Stop all active sessions?');">
+                            ⏹️ Stop All Sessions
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sessions List -->
+            {% if sessions %}
+            <div class="row g-3">
+                {% for session in sessions %}
+                <div class="col-lg-6 col-xl-12">
+                    <div class="card session-card">
+                        <div class="card-body">
+                            <!-- Session Header -->
+                            <div class="session-header">
+                                <div>
+                                    <h5 class="card-title mb-1">
+                                        {% if session.id|stringformat:"s" in active_session_ids %}
+                                        <span class="active-indicator"></span>
+                                        {% endif %}
+                                        {{ session.subject }}
+                                    </h5>
+                                    <small class="text-muted">
+                                        Created by <strong>{{ session.created_by.username }}</strong>
+                                    </small>
+                                </div>
+                                <span class="session-status-badge status-{{ session.status }}">
+                                    {% if session.status == 'ongoing' %}
+                                    🔴 Ongoing
+                                    {% elif session.status == 'ended' %}
+                                    ⏹️ Ended
+                                    {% else %}
+                                    📋 Ready
+                                    {% endif %}
+                                </span>
+                            </div>
+
+                            <!-- Session Metadata -->
+                            <div class="session-meta">
+                                <div class="meta-item">
+                                    <span>📅</span>
+                                    <span><strong>Started:</strong> <span>{{ session.start_time|date:"d M Y H:i:s" }}</span></span>
+                                </div>
+                                {% if session.end_time %}
+                                <div class="meta-item">
+                                    <span>🏁</span>
+                                    <span><strong>Ended:</strong> <span>{{ session.end_time|date:"d M Y H:i:s" }}</span></span>
+                                </div>
+                                {% endif %}
+                                {% if session.class_group %}
+                                <div class="meta-item">
+                                    <span>👥</span>
+                                    <span><strong>Class:</strong> <span>{{ session.class_group.name }}</span></span>
+                                </div>
+                                {% endif %}
+                                <div class="meta-item">
+                                    <span>✅</span>
+                                    <span><strong>Present:</strong> <span>{{ session.attendance_records.count }}</span></span>
+                                </div>
+                                <div class="meta-item">
+                                    <span>❓</span>
+                                    <span><strong>Unknown:</strong> <span>{{ session.unidentified_faces.count }}</span></span>
+                                </div>
+                            </div>
+
+                            <!-- Session Notes (if any) -->
+                            {% if session.notes %}
+                            <div class="alert alert-info mb-3 mt-2 py-2">
+                                <strong>Notes:</strong> {{ session.notes }}
+                            </div>
+                            {% endif %}
+
+                            <!-- Mode Indicator -->
+                            {% with session_id_str=session.id|stringformat:"s" %}
+                            {% if session_id_str in dev_mode_session_ids %}
+                            <div class="alert alert-warning mb-3 py-2">
+                                🔧 <strong>DEV MODE:</strong> This session is running in development mode
+                            </div>
+                            {% endif %}
+                            {% endwith %}
+
+                            <!-- Action Buttons -->
+                            <div class="session-actions">
+                                <a href="{% url 'recognition:session_detail' session.id %}" class="btn btn-primary btn-sm">
+                                    👁️ View Details
+                                </a>
+
+                                {% if session.status == 'ended' %}
+                                <a href="{% url 'recognition:start_session' session.id %}" class="btn btn-success btn-sm">
+                                    ▶️ Start Again
+                                </a>
+                                <a href="{% url 'recognition:start_session' session.id %}?dev=1" class="btn btn-warning btn-sm">
+                                    🔧 DEV Mode
+                                </a>
+                                {% else %}
+                                <!-- Session is ongoing or ready -->
+                                {% if session.status == 'ongoing' %}
+                                <a href="{% url 'recognition:end_session' session.id %}" class="btn btn-danger btn-sm"
+                                   onclick="return confirm('End this session?');">
+                                    ⏹️ End Session
+                                </a>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="empty-state">
+                <div class="empty-state-icon">📝</div>
+                <h3 class="text-muted mb-3">No Sessions Yet</h3>
+                <p class="text-muted mb-4">
+                    You haven't created any recognition sessions yet. Get started by creating your first session!
+                </p>
+                <a href="{% url 'recognition:create_session' %}" class="btn btn-primary btn-lg">
+                    Create Your First Session
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

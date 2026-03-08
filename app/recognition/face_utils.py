@@ -145,34 +145,82 @@ def safe_load_dnn_model():
 
     return net
 
-def save_unidentified_faces(frame, face_location, session=None, base_dir='uploads/unidentified/', encoding=None):
+def save_unidentified_faces(frame, face_location, session=None, base_dir='unidentified/', encoding=None):
     """
     Save both the cropped face AND the full frame with face marked.
     Returns: (cropped_path, full_path, encoding)
+    
+    Note: Saves to Django's configured MEDIA_ROOT with fallback to app media directory
     """
     import cv2, os, uuid
     from django.conf import settings
 
     top, right, bottom, left = face_location
 
-    # Save cropped face
-    cropped = frame[top:bottom, left:right]
-    cropped_filename = f"{uuid.uuid4()}_cropped.jpg"
-    cropped_path = os.path.join(base_dir, 'cropped', cropped_filename)
-    cropped_abs_path = os.path.join(settings.MEDIA_ROOT, cropped_path)
-    os.makedirs(os.path.dirname(cropped_abs_path), exist_ok=True)
-
-    # Save full frame with rectangle
-    full_frame = frame.copy()
-    cv2.rectangle(full_frame, (left, top), (right, bottom), (0, 255, 0), 2)
-    full_filename = f"{uuid.uuid4()}_full.jpg"
-    full_path = os.path.join(base_dir, 'full', full_filename)
-    full_abs_path = os.path.join(settings.MEDIA_ROOT, full_path)
-    os.makedirs(os.path.dirname(full_abs_path), exist_ok=True)
-
     try:
-        cv2.imwrite(cropped_abs_path, cropped)
-        cv2.imwrite(full_abs_path, full_frame)
+        # Determine which media root to use
+        media_root = getattr(settings, 'MEDIA_ROOT', None)
+        using_fallback = False
+        
+        # Try to use configured MEDIA_ROOT first
+        if media_root:
+            try:
+                # Try to create the directory and verify writeability
+                os.makedirs(media_root, exist_ok=True)
+                # Test write access by attempting to create/delete a test file
+                test_path = os.path.join(media_root, '.writetest')
+                with open(test_path, 'w') as f:
+                    f.write('test')
+                os.remove(test_path)
+                print(f"✅ Using MEDIA_ROOT: {media_root}")
+            except (PermissionError, OSError, IOError) as e:
+                print(f"⚠️  MEDIA_ROOT not accessible ({media_root}): {e}")
+                # Fall back to app's media directory
+                media_root = os.path.join(settings.BASE_DIR, 'app', 'media')
+                os.makedirs(media_root, exist_ok=True)
+                using_fallback = True
+                print(f"✅ Using fallback media directory: {media_root}")
+        else:
+            # No MEDIA_ROOT configured, use app's media directory
+            media_root = os.path.join(settings.BASE_DIR, 'app', 'media')
+            os.makedirs(media_root, exist_ok=True)
+            using_fallback = True
+            print(f"✅ Using app media directory: {media_root}")
+        
+        # Save cropped face
+        cropped = frame[top:bottom, left:right]
+        cropped_filename = f"{uuid.uuid4()}_cropped.jpg"
+        cropped_rel_path = os.path.join(base_dir, 'cropped', cropped_filename)
+        cropped_abs_path = os.path.join(media_root, cropped_rel_path)
+        
+        # Create directory for cropped faces
+        cropped_dir = os.path.dirname(cropped_abs_path)
+        os.makedirs(cropped_dir, exist_ok=True)
+        
+        # Save the cropped face
+        success = cv2.imwrite(cropped_abs_path, cropped)
+        if not success:
+            print(f"❌ Failed to write cropped face: {cropped_abs_path}")
+            return None, None, encoding
+        print(f"✅ Saved cropped face to: {cropped_abs_path}")
+
+        # Save full frame with rectangle
+        full_frame = frame.copy()
+        cv2.rectangle(full_frame, (left, top), (right, bottom), (0, 255, 0), 2)
+        full_filename = f"{uuid.uuid4()}_full.jpg"
+        full_rel_path = os.path.join(base_dir, 'full', full_filename)
+        full_abs_path = os.path.join(media_root, full_rel_path)
+        
+        # Create directory for full frames
+        full_dir = os.path.dirname(full_abs_path)
+        os.makedirs(full_dir, exist_ok=True)
+        
+        # Save the full frame
+        success = cv2.imwrite(full_abs_path, full_frame)
+        if not success:
+            print(f"❌ Failed to write full frame: {full_abs_path}")
+            return None, None, encoding
+        print(f"✅ Saved full frame to: {full_abs_path}")
 
         # If encoding was not passed, compute it
         if encoding is None:
@@ -181,7 +229,12 @@ def save_unidentified_faces(frame, face_location, session=None, base_dir='upload
             encodings = face_recognition.face_encodings(rgb_face)
             encoding = encodings[0] if encodings else None
 
-        return cropped_path, full_path, encoding
+        # Return relative paths (for storing in database)
+        return cropped_rel_path, full_rel_path, encoding
+    
     except Exception as e:
-        print(f"❌ Failed to save unidentified face: {e}")
-        return None, None, None
+        print(f"❌ Error saving unidentified face: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return None values but allow recognition to continue
+        return None, None, encoding

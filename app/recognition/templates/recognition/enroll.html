@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Enroll Students - FaceTrack Lite{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Enroll Student</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Upload face images of the student to create face encodings for recognition.
+                        We recommend at least 3 clear face images from different angles.
+                    </p>
+
+                    <form method="POST" enctype="multipart/form-data" id="enrollForm">
+                        {% csrf_token %}
+
+                        <!-- Student Information -->
+                        <fieldset class="mb-4">
+                            <legend class="border-bottom pb-2 mb-3">Student Information</legend>
+
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger mb-3">
+                                <h5>Form Errors:</h5>
+                                {% for error in form.non_field_errors %}
+                                <p class="mb-2">• {{ error }}</p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Full Name -->
+                            <div class="mb-3">
+                                <label for="{{ form.full_name.id_for_label }}" class="form-label">
+                                    {{ form.full_name.label }} <span style="color: red;">*</span>
+                                </label>
+                                {{ form.full_name }}
+                                {% if form.full_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.full_name.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="form-text text-muted d-block mt-1">Enter the student's full name</small>
+                            </div>
+
+                            <!-- Registration Number -->
+                            <div class="mb-3">
+                                <label for="{{ form.registration_number.id_for_label }}" class="form-label">
+                                    {{ form.registration_number.label }} <span style="color: red;">*</span>
+                                </label>
+                                {{ form.registration_number }}
+                                {% if form.registration_number.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.registration_number.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="form-text text-muted d-block mt-1">Unique student ID number</small>
+                            </div>
+
+                            <!-- Email -->
+                            <div class="mb-3">
+                                <label for="{{ form.email.id_for_label }}" class="form-label">
+                                    {{ form.email.label }}
+                                </label>
+                                {{ form.email }}
+                                {% if form.email.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.email.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="form-text text-muted d-block mt-1">Optional: Student email address</small>
+                            </div>
+
+                            <!-- Course -->
+                            <div class="mb-3">
+                                <label for="{{ form.course.id_for_label }}" class="form-label">
+                                    {{ form.course.label }}
+                                </label>
+                                {{ form.course }}
+                                {% if form.course.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.course.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="form-text text-muted d-block mt-1">Student's course or program</small>
+                            </div>
+
+                            <!-- Year of Study -->
+                            <div class="mb-3">
+                                <label for="{{ form.year_of_study.id_for_label }}" class="form-label">
+                                    {{ form.year_of_study.label }}
+                                </label>
+                                {{ form.year_of_study }}
+                                {% if form.year_of_study.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.year_of_study.errors.0 }}
+                                </div>
+                                {% endif %}
+                                <small class="form-text text-muted d-block mt-1">Year of study (1, 2, 3, 4, etc.)</small>
+                            </div>
+                        </fieldset>
+
+                        <!-- Face Images -->
+                        <fieldset class="mb-4">
+                            <legend class="border-bottom pb-2 mb-3">Face Images</legend>
+                            
+                            <div class="mb-3">
+                                <label for="face_images" class="form-label">
+                                    Upload Face Images <span style="color: red;">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input type="file" class="form-control" id="face_images" name="face_images" 
+                                           accept="image/*" multiple required>
+                                </div>
+                                <small class="form-text text-muted d-block mt-2">
+                                    📸 Select multiple image files. Supported formats: JPEG, PNG, GIF, BMP<br>
+                                    💡 Tips: <br>
+                                    • Use at least 3 clear images from different angles<br>
+                                    • Ensure only one face per image<br>
+                                    • Good lighting is important for recognition accuracy<br>
+                                    • All images should be of the same person
+                                </small>
+                                <div id="fileList" class="mt-3"></div>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div id="progressContainer" class="mb-3" style="display: none;">
+                                <label class="form-label">Upload Progress</label>
+                                <div class="progress">
+                                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 0%">0%</div>
+                                </div>
+                            </div>
+
+                            <!-- Form Errors -->
+                            {% if form.errors %}
+                            <div class="alert alert-danger mt-3">
+                                <h5>Errors:</h5>
+                                {% for field, errors in form.errors.items %}
+                                    {% if field != '__all__' %}
+                                    <p class="mb-2"><strong>{{ field }}:</strong> {{ errors.0 }}</p>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </fieldset>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-grid gap-2 d-sm-flex gap-3">
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1" id="submitBtn">
+                                <span id="submitText">Enroll Student</span>
+                            </button>
+                            <a href="{% url 'recognition:index' %}" class="btn btn-secondary btn-lg flex-grow-1">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('face_images').addEventListener('change', function(e) {
+    const fileList = document.getElementById('fileList');
+    fileList.innerHTML = '';
+    
+    if (this.files.length > 0) {
+        const ul = document.createElement('ul');
+        ul.className = 'list-group mt-2';
+        
+        for (let file of this.files) {
+            const li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            li.innerHTML = `
+                <span>
+                    📄 ${file.name}
+                    <small class="text-muted d-block">${(file.size / 1024).toFixed(2)} KB</small>
+                </span>
+                <span class="badge bg-primary rounded-pill">${file.type}</span>
+            `;
+            ul.appendChild(li);
+        }
+        fileList.appendChild(ul);
+    }
+});
+
+// Poll progress while form is submitting
+document.getElementById('enrollForm').addEventListener('submit', function() {
+    document.getElementById('progressContainer').style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+    
+    // Poll for progress
+    const interval = setInterval(() => {
+        fetch('{% url "recognition:enroll_progress" %}')
+            .then(response => response.json())
+            .then(data => {
+                const progress = data.progress || 0;
+                document.getElementById('progressBar').style.width = progress + '%';
+                document.getElementById('progressBar').textContent = progress + '%';
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                }
+            });
+    }, 500);
+});
+</script>
+
+<style>
+    fieldset {
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        padding: 20px;
+    }
+    
+    legend {
+        width: auto;
+        font-weight: 600;
+        color: #333;
+        font-size: 1.1rem;
+    }
+    
+    .form-control:invalid {
+        border-color: #dc3545;
+    }
+    
+    .invalid-feedback {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}

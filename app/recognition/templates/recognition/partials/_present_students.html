@@ -1,0 +1,36 @@
+<!-- Present Students List Partial -->
+
+{% if present_students %}
+<div class="table-responsive">
+    <table class="table table-hover mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Student Name</th>
+                <th>Registration #</th>
+                <th>Course</th>
+                <th>Year</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in present_students %}
+            <tr>
+                <td>
+                    <strong>{{ student.full_name }}</strong>
+                </td>
+                <td>
+                    <span class="badge bg-success">{{ student.registration_number }}</span>
+                </td>
+                <td>{{ student.course|default:"—" }}</td>
+                <td>
+                    <span class="badge bg-info">Year {{ student.year_of_study }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-4 text-muted">
+    ✅ No students present yet. Recognition in progress...
+</div>
+{% endif %}

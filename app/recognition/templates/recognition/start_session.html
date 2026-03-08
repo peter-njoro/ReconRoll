@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Create Session - FaceTrack Lite{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Create New Session</h4>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Create a new attendance session for face recognition. You can then start the recognition process.
+                    </p>
+
+                    <form method="POST">
+                        {% csrf_token %}
+
+                        <!-- Form Errors -->
+                        {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-3">
+                            <h5>Form Errors:</h5>
+                            {% for error in form.non_field_errors %}
+                            <p class="mb-2">• {{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Subject -->
+                        <div class="mb-3">
+                            <label for="{{ form.subject.id_for_label }}" class="form-label">
+                                {{ form.subject.label }} <span style="color: red;">*</span>
+                            </label>
+                            {{ form.subject }}
+                            {% if form.subject.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.subject.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block mt-1">
+                                Name or topic of the session (e.g., "Physics Class - Lecture 5")
+                            </small>
+                        </div>
+
+                        <!-- Class Group -->
+                        <div class="mb-3">
+                            <label for="{{ form.class_group.id_for_label }}" class="form-label">
+                                {{ form.class_group.label }}
+                            </label>
+                            {{ form.class_group }}
+                            {% if form.class_group.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.class_group.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block mt-1">
+                                Select the class group for attendance tracking. Optional, but recommended.
+                            </small>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="mb-3">
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                {{ form.notes.label }}
+                            </label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.notes.errors.0 }}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted d-block mt-1">
+                                Additional notes or information about this session
+                            </small>
+                        </div>
+
+                        <!-- Info Box -->
+                        <div class="alert alert-info mb-4">
+                            <p class="mb-2"><strong>ℹ️ Before you start:</strong></p>
+                            <ul class="mb-0 ps-3">
+                                <li>Ensure all students are enrolled in the system</li>
+                                <li>Your camera/video source should be ready</li>
+                                <li>Good lighting is recommended for best recognition</li>
+                            </ul>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-grid gap-2 d-sm-flex gap-3">
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+                                Create Session
+                            </button>
+                            <a href="{% url 'recognition:index' %}" class="btn btn-secondary btn-lg flex-grow-1">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control:invalid {
+        border-color: #dc3545;
+    }
+    
+    .invalid-feedback {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+{% endblock %}

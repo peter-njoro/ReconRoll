@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - FaceTrack Lite{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <!-- Profile Header Card -->
+            <div class="card mb-4">
+                <div class="card-body p-5">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div style="width: 80px; height: 80px; background-color: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2.5rem;">
+                                👤
+                            </div>
+                        </div>
+                        <div class="col">
+                            <h2 class="mb-1">{{ user.full_name|default:user.username }}</h2>
+                            <p class="text-muted mb-0">@{{ user.username }}</p>
+                        </div>
+                        <div class="col-auto">
+                            <a href="{% url 'users:edit_profile' %}" class="btn btn-primary" style="display: none;">
+                                Edit Profile
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Information Tabs -->
+            <div class="card">
+                <ul class="nav nav-tabs border-bottom" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button">
+                            ℹ️ Account Information
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button">
+                            🔒 Security
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity" type="button">
+                            📊 Activity
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- Account Information Tab -->
+                    <div class="tab-pane fade show active" id="info" role="tabpanel">
+                        <div class="p-4">
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <h6 class="text-uppercase text-muted fw-bold mb-2">Username</h6>
+                                    <p class="mb-0"><strong>{{ user.username }}</strong></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-uppercase text-muted fw-bold mb-2">Full Name</h6>
+                                    <p class="mb-0"><strong>{{ user.full_name|default:"Not set" }}</strong></p>
+                                </div>
+                            </div>
+
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <h6 class="text-uppercase text-muted fw-bold mb-2">Email Address</h6>
+                                    <p class="mb-0">
+                                        <strong>{{ user.email }}</strong>
+                                        {% if user.email %}
+                                        <span class="badge bg-success ms-2">Verified</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-uppercase text-muted fw-bold mb-2">Account Type</h6>
+                                    <div>
+                                        {% if user.is_student %}
+                                        <span class="badge bg-info me-2">👤 Student</span>
+                                        {% endif %}
+                                        {% if user.is_teacher %}
+                                        <span class="badge bg-primary me-2">👨‍🏫 Teacher</span>
+                                        {% endif %}
+                                        {% if not user.is_student and not user.is_teacher %}
+                                        <span class="badge bg-secondary">Not specified</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <h6 class="text-uppercase text-muted fw-bold mb-2">Account Created</h6>
+                                    <p class="mb-0"><strong>{{ user.date_joined|date:"d M Y, H:i" }}</strong></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-uppercase text-muted fw-bold mb-2">Last Login</h6>
+                                    <p class="mb-0">
+                                        <strong>
+                                            {% if user.last_login %}
+                                            {{ user.last_login|date:"d M Y, H:i" }}
+                                            {% else %}
+                                            Never
+                                            {% endif %}
+                                        </strong>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <p class="text-muted mb-0">
+                                <small>
+                                    Your profile information is used to personalize your FaceTrack Lite experience and is kept secure.
+                                </small>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Security Tab -->
+                    <div class="tab-pane fade" id="security" role="tabpanel">
+                        <div class="p-4">
+                            <h5 class="mb-4">Security Settings</h5>
+
+                            <!-- Password Section -->
+                            <div class="mb-4 pb-4 border-bottom">
+                                <h6 class="fw-bold mb-3">🔐 Password</h6>
+                                <p class="text-muted mb-3">
+                                    Your password was last changed <strong>recently</strong>. 
+                                    We recommend changing it regularly for security.
+                                </p>
+                                <a href="{% url 'users:change_password' %}" class="btn btn-secondary" style="display: none;">
+                                    Change Password
+                                </a>
+                                <button class="btn btn-secondary" disabled>
+                                    Change Password (Coming Soon)
+                                </button>
+                            </div>
+
+                            <!-- Two-Factor Authentication -->
+                            <div class="mb-4 pb-4 border-bottom">
+                                <h6 class="fw-bold mb-3">🔒 Two-Factor Authentication</h6>
+                                <p class="text-muted mb-3">
+                                    Add an extra layer of security to your account.
+                                </p>
+                                <button class="btn btn-secondary" disabled>
+                                    Enable 2FA (Coming Soon)
+                                </button>
+                            </div>
+
+                            <!-- Active Sessions -->
+                            <div>
+                                <h6 class="fw-bold mb-3">📱 Active Sessions</h6>
+                                <p class="text-muted mb-3">
+                                    You have 1 active session on this device.
+                                </p>
+                                <div class="list-group">
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <p class="mb-1"><strong>Current Session</strong></p>
+                                                <small class="text-muted">Last active now</small>
+                                            </div>
+                                            <span class="badge bg-success">Active</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Tab -->
+                    <div class="tab-pane fade" id="activity" role="tabpanel">
+                        <div class="p-4">
+                            <h5 class="mb-4">Recent Activity</h5>
+
+                            <div class="alert alert-info">
+                                <p class="mb-0">
+                                    📊 Your activity information will appear here as you use FaceTrack Lite.
+                                </p>
+                            </div>
+
+                            <div class="timeline">
+                                <div class="event-item info">
+                                    <div class="event-time">📅 Today at {{ user.last_login|time:"H:i" }}</div>
+                                    <div class="mt-2">Logged in to your account</div>
+                                </div>
+
+                                <div class="event-item info">
+                                    <div class="event-time">📅 {{ user.date_joined|date:"d M Y" }}</div>
+                                    <div class="mt-2">Account created</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logout Button -->
+            <div class="mt-4 d-grid gap-2">
+                <a href="{% url 'users:logout' %}" class="btn btn-outline-danger btn-lg">
+                    🚪 Logout
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .nav-tabs {
+        border-radius: 10px 10px 0 0;
+    }
+
+    .nav-tabs .nav-link {
+        border: none;
+        color: #6c757d;
+        border-bottom: 3px solid transparent;
+        font-weight: 500;
+    }
+
+    .nav-tabs .nav-link:hover {
+        border-bottom-color: #dee2e6;
+        color: #333;
+    }
+
+    .nav-tabs .nav-link.active {
+        border-bottom-color: #007bff;
+        color: #007bff;
+        background-color: transparent;
+    }
+
+    .tab-content {
+        border-radius: 0 0 10px 10px;
+    }
+
+    .event-item {
+        padding: 12px 15px;
+        border-left: 3px solid #dee2e6;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+
+    .event-item.info {
+        border-left-color: #17a2b8;
+        background-color: #d1ecf1;
+    }
+
+    .event-time {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: 600;
+    }
+
+    .card {
+        border-radius: 10px;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %}

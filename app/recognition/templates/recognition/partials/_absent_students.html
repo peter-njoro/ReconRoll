@@ -1,0 +1,44 @@
+<!-- Absent Students List Partial -->
+
+{% if absent_students %}
+<div class="table-responsive">
+    <table class="table table-hover mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Student Name</th>
+                <th>Registration #</th>
+                <th>Email</th>
+                <th>Course</th>
+                <th>Year</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in absent_students %}
+            <tr>
+                <td>
+                    <strong>{{ student.full_name }}</strong>
+                </td>
+                <td>
+                    <span class="badge bg-danger">{{ student.registration_number }}</span>
+                </td>
+                <td>
+                    {% if student.email %}
+                    <a href="mailto:{{ student.email }}">{{ student.email }}</a>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>{{ student.course|default:"—" }}</td>
+                <td>
+                    <span class="badge bg-warning text-dark">Year {{ student.year_of_study }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center py-4 text-muted">
+    ✅ All expected students are present!
+</div>
+{% endif %}
