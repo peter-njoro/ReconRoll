@@ -92,10 +92,11 @@ class SessionViewSet(viewsets.ModelViewSet):
     def absent(self, request, pk=None):
         """Get all absent people for a session"""
         session = self.get_object()
-        expected_people = Person.objects.filter(
-            expected_sessions__session=session
-        ).distinct()
-        if not expected_people.exists():
+        
+        # Get expected people from roster if available
+        if session.roster:
+            expected_people = session.roster.people.all()
+        else:
             return Response([])
 
         present_ids = set(

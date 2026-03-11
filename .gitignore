@@ -189,4 +189,9 @@ app/staticfiles/*
 
 facetrack-frontend/node_modules
 
-
+# image files
+*.jpg
+*.png 
+*.HEIC
+*.webp
+ 

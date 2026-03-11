@@ -126,10 +126,11 @@ def load_known_encodings(session=None):
     known_names = []
 
     if session:
-        people = Person.objects.filter(
-            expected_sessions__session=session
-        ).prefetch_related('face_encodings')
-        if not people.exists():
+        # Get people from the session's roster if it exists
+        if session.roster:
+            people = session.roster.people.prefetch_related('face_encodings')
+        else:
+            # Fallback to all people if no roster is set
             people = Person.objects.all().prefetch_related('face_encodings')
     else:
         people = Person.objects.all().prefetch_related('face_encodings')
@@ -938,9 +939,12 @@ def session_detail(request, session_id):
     """Get detailed information about a session"""
     session = get_object_or_404(Session, id=session_id)
     
-    expected_people = Person.objects.filter(
-        expected_sessions__session=session
-    )
+    # Get expected people from roster if available
+    if session.roster:
+        expected_people = session.roster.people.all()
+    else:
+        expected_people = Person.objects.none()
+    
     present_records = get_present_records(session).select_related('person')
     present_people = [record.person for record in present_records]
     absent_people = expected_people.exclude(id__in=[p.id for p in present_people])
@@ -1511,7 +1515,13 @@ def session_present_people_partial(request, session_id):
 def session_absent_people_partial(request, session_id):
     """Get absent people for a session"""
     session = get_object_or_404(Session, id=session_id)
-    expected_people = Person.objects.filter(expected_sessions__session=session)
+    
+    # Get expected people from roster if available
+    if session.roster:
+        expected_people = session.roster.people.all()
+    else:
+        expected_people = Person.objects.none()
+    
     present_records = list(get_present_records(session).select_related('person'))
     present_ids = [record.person.id for record in present_records]
     absent_people = expected_people.exclude(id__in=present_ids)

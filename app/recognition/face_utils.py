@@ -24,13 +24,14 @@ def load_known_encodings_from_db(session=None):
 
     # Determine which people to load based on session scope
     if session:
-        people = Person.objects.filter(
-            expected_sessions__session=session
-        ).prefetch_related('face_encodings')
-        scope_info = f"expected people for session {session.id}"
-        if not people.exists():
+        # Get people from the session's roster if it exists
+        if session.roster:
+            people = session.roster.people.prefetch_related('face_encodings')
+            scope_info = f"roster '{session.roster.name}' for session {session.id}"
+        else:
+            # Fallback to all people if no roster is set
             people = Person.objects.all().prefetch_related('face_encodings')
-            scope_info = "all people (no session filter)"
+            scope_info = "all people (no roster set for session)"
     else:
         people = Person.objects.all().prefetch_related('face_encodings')
         scope_info = "all people (no session filter)"
