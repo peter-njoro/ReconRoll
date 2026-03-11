@@ -25,9 +25,12 @@ class CsrfExemptSessionAuthentication(SessionAuthentication):
 
 
 def get_expected_count(session):
-    expected_people = session.expected_persons.count()
-    if expected_people > 0:
-        return expected_people
+    """
+    Get the expected count of people for a session.
+    Priority: 1) Roster people count, 2) Manual expected_count field
+    """
+    if session.roster:
+        return session.roster.people.count()
     return session.expected_count or 0
 
 

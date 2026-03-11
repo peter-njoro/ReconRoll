@@ -271,7 +271,12 @@ class Session(models.Model):
 
     def get_attendance_stats(self):
         """Calculate attendance statistics for this session"""
-        expected = self.expected_persons.count()
+        # Get expected count from roster or manual field
+        if self.roster:
+            expected = self.roster.people.count()
+        else:
+            expected = self.expected_count or 0
+            
         present = self.recognitions.count()
         absent = expected - present
 

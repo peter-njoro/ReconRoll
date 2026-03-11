@@ -88,9 +88,12 @@ def get_present_records(session):
 
 
 def get_expected_count(session):
-    expected_links = session.expected_persons.count()
-    if expected_links > 0:
-        return expected_links
+    """
+    Get the expected count of people for a session.
+    Priority: 1) Roster people count, 2) Manual expected_count field
+    """
+    if session.roster:
+        return session.roster.people.count()
     return session.expected_count or 0
 
 
@@ -791,8 +794,7 @@ def enroll_success(request):
         'alternative': '/api/people/'
     }, status=410)
 
-@login_required
-@csrf_exempt
+@api_view(['POST', 'GET'])
 def create_session_view(request):
     """Create a new recognition session"""
     if request.method == 'POST':
@@ -800,13 +802,16 @@ def create_session_view(request):
         # application/json.  Django only populates request.POST for
         # application/x-www-form-urlencoded bodies, so request.POST
         # is an empty QueryDict here.  Parse the raw body instead.
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Request body is not valid JSON'
-            }, status=400)
+        data = request.data if hasattr(request, 'data') else None
+        
+        if data is None:
+            try:
+                data = json.loads(request.body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Request body is not valid JSON'
+                }, status=400)
 
         if 'subject' in data and 'name' not in data:
             data['name'] = data.pop('subject')
@@ -814,7 +819,9 @@ def create_session_view(request):
         form = SessionForm(data)
         if form.is_valid():
             session = form.save(commit=False)
-            session.created_by = request.user
+            # Set created_by if user is authenticated, otherwise allow None
+            if request.user.is_authenticated:
+                session.created_by = request.user
             session.save()
             
             # If a roster was selected, RosterAttendance records will be created automatically

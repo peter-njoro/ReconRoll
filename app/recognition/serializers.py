@@ -72,7 +72,7 @@ class SessionSerializer(serializers.ModelSerializer):
         
         # Count expected people from roster if session has one
         if obj.roster:
-            expected_count = RosterAttendance.objects.filter(roster=obj.roster, session=obj).count()
+            expected_count = obj.roster.people.count()
         else:
             expected_count = obj.expected_count or 0
         
@@ -89,7 +89,7 @@ class SessionSerializer(serializers.ModelSerializer):
     def get_expected_people_count(self, obj):
         # Count expected people from roster if session has one
         if obj.roster:
-            return RosterAttendance.objects.filter(roster=obj.roster, session=obj).count()
+            return obj.roster.people.count()
         return obj.expected_count or 0
     
 class EventSerializer(serializers.ModelSerializer):
