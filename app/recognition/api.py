@@ -145,15 +145,18 @@ class SessionViewSet(viewsets.ModelViewSet):
         """
         Upload a frame for processing (production mode).
 
-        Expected payload:
-        {
-            "frame": "base64_encoded_image_data"
-        }
+        Accepts either:
+        1. Multipart form data with 'frame' file (from frontend webcam)
+        2. JSON with base64 'frame' data (legacy)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         session = self.get_object()
 
         # Check if session is running
         if session.status != 'in_progress':
+            logger.warning(f"Upload frame rejected: session {pk} not in progress (status: {session.status})")
             return Response(
                 {'error': 'Session is not running. Start the session first.'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -161,20 +164,48 @@ class SessionViewSet(viewsets.ModelViewSet):
 
         # Check if recognition thread is active
         if str(pk) not in active_recognition:
+            logger.warning(f"Upload frame rejected: no active recognition thread for session {pk}")
             return Response(
                 {'error': 'Recognition thread not active. Please restart the session.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # Get base64 frame data
+            # Check if this is multipart form data (from frontend webcam)
+            if request.FILES.get('frame'):
+                logger.debug(f"Received multipart frame upload for session {pk}")
+                
+                # Read the uploaded file
+                frame_file = request.FILES['frame']
+                frame_bytes = frame_file.read()
+                
+                # Add to processing queue
+                if not frame_queue.full():
+                    frame_queue.put_nowait(bytes(frame_bytes))
+                    logger.debug(f"Frame queued for session {pk}. Queue size: {frame_queue.qsize()}")
+                    return Response({
+                        'status': 'queued',
+                        'queue_size': frame_queue.qsize(),
+                        'message': 'Frame queued for processing'
+                    })
+                else:
+                    logger.warning(f"Frame queue full for session {pk}")
+                    return Response({
+                        'status': 'queue_full',
+                        'message': 'Processing queue is full. Frame skipped.'
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
+            # Otherwise, try JSON with base64 (legacy)
             frame_data = request.data.get('frame')
             if not frame_data:
+                logger.debug(f"No frame data provided for session {pk}")
                 return Response(
                     {'error': 'No frame data provided'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            logger.debug(f"Received JSON/base64 frame upload for session {pk}")
+            
             # Decode base64 to image
             if ',' in frame_data:
                 # Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
@@ -184,21 +215,23 @@ class SessionViewSet(viewsets.ModelViewSet):
             frame_bytes = base64.b64decode(frame_data)
 
             # Add to processing queue
-            # The frame is already in JPEG format, so we can add it directly
             if not frame_queue.full():
-                frame_queue.put(frame_bytes)
+                frame_queue.put_nowait(bytes(frame_bytes))
+                logger.debug(f"Frame queued for session {pk}. Queue size: {frame_queue.qsize()}")
                 return Response({
                     'status': 'queued',
                     'queue_size': frame_queue.qsize(),
                     'message': 'Frame queued for processing'
                 })
             else:
+                logger.warning(f"Frame queue full for session {pk}")
                 return Response({
                     'status': 'queue_full',
                     'message': 'Processing queue is full. Frame skipped.'
                 }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         except Exception as e:
+            logger.error(f"Failed to process frame for session {pk}: {e}", exc_info=True)
             return Response(
                 {'error': f'Failed to process frame: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

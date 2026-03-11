@@ -67,12 +67,18 @@ export const recognitionService = {
         const formData = new FormData();
         formData.append('frame', blob, 'frame.jpg');
         
-        const url = `/session/${sessionId}/upload_frame/`;
+        // Use DRF router URL pattern: /api/sessions/<pk>/upload_frame/
+        const url = `/sessions/${sessionId}/upload_frame/`;
         console.debug(`[uploadFrame] sessionId="${sessionId}"`);
         console.debug(`[uploadFrame] Calling POST ${url} with multipart/form-data`);
         
-        // Axios will automatically set Content-Type: multipart/form-data with boundary when using FormData
-        return apiClient.post(url, formData);
+        // IMPORTANT: Let axios set Content-Type automatically for FormData (with boundary)
+        // We must override the default 'application/json' header
+        return apiClient.post(url, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
+        });
     },
 
     // -----------------------------------------------------------------------

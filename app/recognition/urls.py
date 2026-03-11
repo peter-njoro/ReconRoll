@@ -40,6 +40,6 @@ urlpatterns = [
     path('session/<uuid:session_id>/unidentified_partial/', views.session_unidentified_faces_partial, name='session_unidentified_partial'),
     path('session/<uuid:session_id>/progress_partial/', views.recognition_progress_partial, name='recognition_progress_partial'),
 
-    # frame fowarding
-    path("session/<uuid:session_id>/upload_frame/", views.upload_frame, name="upload_frame"),
+    # NOTE: upload_frame is handled by DRF SessionViewSet in api.py
+    # The DRF endpoint is: /api/sessions/<pk>/upload_frame/
 ]

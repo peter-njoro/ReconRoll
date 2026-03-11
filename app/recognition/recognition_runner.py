@@ -8,9 +8,20 @@ import threading
 import queue
 import io
 import time
+import logging
 import face_recognition
 from dotenv import load_dotenv
 from django.utils import timezone
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -20,7 +31,7 @@ scale = float(os.getenv('SCALE', '0.25'))
 min_size = int(os.getenv('MIN_FACE_SIZE', '100'))
 tolerance = float(os.getenv('TOLERANCE', '0.55'))
 
-print(f"Using model={face_model}, scale={scale}, min_size={min_size}, tolerance={tolerance}")
+logger.info(f"Using model={face_model}, scale={scale}, min_size={min_size}, tolerance={tolerance}")
 
 # Setup Django
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -70,7 +81,7 @@ def resolve_person_from_name(name):
 
 
 def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
-    print(f"Starting recognition for session {session_id} | dev_mode={dev_mode}")
+    logger.info(f"Starting recognition for session {session_id} | dev_mode={dev_mode}")
 
     if dev_mode:
         # Run main.py in dev mode
@@ -85,7 +96,8 @@ def run_recognition_from_queue(session_id, stop_flag):
     Production mode: Process frames uploaded via webcam_stream.py
     OPTIMIZED for accuracy: use full num_jitters=2 for encoding, batch processing
     """
-    print(f"Production mode: Processing frames from upload queue for session {session_id}")
+    logger.info(f"Production mode: Processing frames from upload queue for session {session_id}")
+    logger.debug(f"Frame queue object ID: {id(frame_queue)}, initial size: {frame_queue.qsize()}")
     
     try:
         # Load DNN model if using DNN face detection
@@ -101,7 +113,7 @@ def run_recognition_from_queue(session_id, stop_flag):
         session = Session.objects.get(id=session_id)
         # Scope encodings to expected people for the session when possible
         known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
-        print(f"Loaded {len(known_face_encodings)} encodings for background processing")
+        logger.info(f"Loaded {len(known_face_encodings)} encodings for background processing")
 
         # Cache for previously seen unknown encodings in THIS session
         unknown_encodings = []
@@ -114,7 +126,7 @@ def run_recognition_from_queue(session_id, stop_flag):
         
         while True:
             if stop_flag and stop_flag.is_set():
-                print(f"Stop requested for session {session_id}")
+                logger.info(f"Stop requested for session {session_id}")
                 break
 
             try:
@@ -123,7 +135,9 @@ def run_recognition_from_queue(session_id, stop_flag):
                 # here to obtain an owned numpy array. Using bytes avoids passing
                 # shared numpy memory across threads which can trigger memory
                 # corruption in native libraries.
+                logger.debug(f"Waiting for frame from queue... (queue size: {frame_queue.qsize()})")
                 frame_bytes = frame_queue.get(timeout=5)
+                logger.info(f"Got frame from queue! Queue size now: {frame_queue.qsize()}")
                 # Convert frombuffer to owned array to avoid memory corruption
                 # frombuffer creates a read-only view; we need owned data for OpenCV
                 frame_array = np.frombuffer(frame_bytes, np.uint8).copy()
@@ -191,14 +205,28 @@ def run_recognition_from_queue(session_id, stop_flag):
                             is_late = bool(session.start_time and recognized_at > session.start_time)
                             status_value = 'late' if is_late else 'present'
 
-                            record, created = AttendanceSummary.objects.get_or_create(
-                                session=session,
-                                person=person,
-                                defaults={
-                                    'status': status_value,
-                                    'marked_at': recognized_at
-                                }
-                            )
+                            # Use RosterAttendance if session has a roster, otherwise AttendanceSummary
+                            if session.roster:
+                                from recognition.models import RosterAttendance
+                                record, created = RosterAttendance.objects.get_or_create(
+                                    roster=session.roster,
+                                    session=session,
+                                    person=person,
+                                    defaults={
+                                        'status': status_value,
+                                        'marked_at': recognized_at
+                                    }
+                                )
+                            else:
+                                record, created = AttendanceSummary.objects.get_or_create(
+                                    session=session,
+                                    person=person,
+                                    defaults={
+                                        'status': status_value,
+                                        'marked_at': recognized_at
+                                    }
+                                )
+                            
                             status_changed = False
                             if not created and (record.status != status_value or record.marked_at is None):
                                 record.status = status_value
@@ -215,7 +243,7 @@ def run_recognition_from_queue(session_id, stop_flag):
                                     severity='info',
                                     message=f"Person recognized: {person.get_full_name()}"
                                 )
-                                print(f"✓ Attendance marked for {person.get_full_name()} ({recognized_count} total)")
+                                logger.info(f"✓ Attendance marked for {person.get_full_name()} ({recognized_count} total)")
 
                     else:
                         if idx == -1:

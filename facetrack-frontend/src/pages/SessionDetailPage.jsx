@@ -23,6 +23,7 @@ export function SessionDetailPage() {
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
     const uploadIntervalRef = useRef(null);
+    const isProcessingRef = useRef(false); // Ref for immediate access in interval
 
     // Fetch session data
     const fetchData = async () => {
@@ -112,10 +113,32 @@ export function SessionDetailPage() {
 
         console.debug(`[captureAndUploadFrame] sessionId = "${sessionId}"`);
 
-        if (!videoRef.current || !canvasRef.current || !isProcessing) return;
+        // Check if processing is enabled (use ref for immediate access)
+        if (!isProcessingRef.current) {
+            console.debug('[captureAndUploadFrame] Not processing, skipping');
+            return;
+        }
+
+        // Check if refs are available
+        if (!videoRef.current) {
+            console.warn('[captureAndUploadFrame] videoRef not available');
+            return;
+        }
+        
+        if (!canvasRef.current) {
+            console.warn('[captureAndUploadFrame] canvasRef not available');
+            return;
+        }
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
+
+        // Check if video is ready
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+            console.warn('[captureAndUploadFrame] Video not ready yet (dimensions are 0)');
+            return;
+        }
+
         const context = canvas.getContext('2d');
 
         // Set canvas size to match video
@@ -131,9 +154,13 @@ export function SessionDetailPage() {
         try {
             // Upload frame to backend
             console.debug(`[uploadFrame] Calling with sessionId: "${sessionId}"`);
-            await recognitionService.uploadFrame(sessionId, frameData);
+            const response = await recognitionService.uploadFrame(sessionId, frameData);
+            console.debug(`[uploadFrame] Success:`, response.data);
         } catch (err) {
             console.error('[uploadFrame] Error:', err.message);
+            if (err.response) {
+                console.error('[uploadFrame] Response:', err.response.data);
+            }
         }
     };
 
@@ -160,8 +187,30 @@ export function SessionDetailPage() {
             console.debug(`[startRecognition] Starting webcam...`);
             await startWebcam();
 
-            // Start processing flag
+            // IMPORTANT: Set processing flag BEFORE starting interval
+            // Use both state (for UI) and ref (for immediate access in interval)
             setIsProcessing(true);
+            isProcessingRef.current = true;
+            console.debug(`[startRecognition] Set isProcessing to true`);
+
+            // Wait for backend to update session status and video to be ready
+            // Poll the session status to ensure it's actually running
+            console.debug(`[startRecognition] Waiting for session to be in_progress...`);
+            let retries = 0;
+            const maxRetries = 10;
+            while (retries < maxRetries) {
+                const statusRes = await recognitionService.getSession(sessionId);
+                if (statusRes.data.session.status === 'in_progress') {
+                    console.debug(`[startRecognition] Session is in_progress, starting frame uploads`);
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 200));
+                retries++;
+            }
+
+            if (retries >= maxRetries) {
+                throw new Error('Session did not start within expected time');
+            }
 
             // Start uploading frames every 500ms (2 FPS)
             console.debug(`[startRecognition] Setting up frame upload interval...`);
@@ -176,6 +225,7 @@ export function SessionDetailPage() {
             console.error('[startRecognition] Error:', err.message);
             setError('Failed to start recognition: ' + err.message);
             setIsProcessing(false);
+            isProcessingRef.current = false;
         }
     };
 
@@ -188,6 +238,7 @@ export function SessionDetailPage() {
             // Stop webcam and uploads
             stopWebcam();
             setIsProcessing(false);
+            isProcessingRef.current = false;
 
             // Refresh data
             await fetchData();

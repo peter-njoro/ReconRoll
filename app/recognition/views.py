@@ -5,6 +5,8 @@ import uuid
 import json
 import hashlib
 import threading
+import queue
+import logging
 import numpy as np
 import face_recognition
 from django.conf import settings
@@ -36,6 +38,9 @@ from recognition.models import (
 )
 from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
 import time
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Import face recognition constants from settings
 KNOWN_FACES_DIR = settings.FACE_RECOGNITION_DIR
@@ -176,144 +181,6 @@ def get_cached_known_encodings(session=None, force_reload=False):
     }
     cache.set(cache_key, result, ENCODING_CACHE_TTL)
     return result
-
-@csrf_exempt
-def upload_frame(request):
-    """
-    API endpoint for webcam_stream.py to upload frames for processing.
-    OPTIMIZED for speed: caching, frame skipping, and minimal processing.
-    Uses face_utils.py functions for face detection and encoding.
-    """
-    if request.method != "POST" or not request.FILES.get("frame"):
-        return JsonResponse({"status": "error", "message": "No frame received"}, status=400)
-    
-    start_time = time.time()
-    
-    try:
-        # Decode the uploaded frame
-        file = request.FILES["frame"].read()
-        np_arr = np.frombuffer(file, np.uint8)
-        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        
-        if frame is None:
-            return JsonResponse({"status": "error", "message": "Failed to decode frame"}, status=400)
-
-        # Find active session
-        active_session_id = None
-        active_session = None
-        for session_id, session_data in active_recognition.items():
-            if session_data.get("thread") and session_data["thread"].is_alive():
-                if session_data.get("mode") == "prod" or "process" not in session_data:
-                    active_session_id = session_id
-                    try:
-                        active_session = Session.objects.get(id=session_id)
-                    except Session.DoesNotExist:
-                        pass
-                    break
-
-        # ===== OPTIMIZATION 1: Frame Skipping =====
-        # Skip 2 out of every 3 frames (process ~33% of frames)
-        # This maintains responsiveness while reducing CPU load
-        if active_session_id:
-            if active_session_id not in FRAME_SKIP_COUNTER:
-                FRAME_SKIP_COUNTER[active_session_id] = 0
-            
-            FRAME_SKIP_COUNTER[active_session_id] += 1
-            
-            # Queue frame for background processing (don't skip queueing)
-            try:
-                # Queue the raw uploaded bytes (variable `file`) instead of
-                # re-encoding here. The upload already contains JPEG bytes so
-                # re-encoding is unnecessary and invokes extra native
-                # allocations that can contribute to heap corruption when
-                # combined with threaded/native libraries.
-                # CRITICAL: Make a copy of bytes to ensure they remain valid
-                # after the Django request context ends. The original `file`
-                # bytes may reference Django's request buffer which is freed
-                # when the request ends, causing memory corruption in background thread.
-                if FRAME_SKIP_COUNTER[active_session_id] % PROCESS_EVERY_N_FRAMES == 0:
-                    # bytes() creates a deep copy of the data
-                    frame_queue.put_nowait(bytes(file))
-            except Exception as e:
-                print(f"[WARNING] Could not queue frame: {e}")
-
-        # ===== Use get_cached_known_encodings with session scoping =====
-        # Avoids database queries - cache for 10 minutes
-        cached_data = get_cached_known_encodings(session=active_session)
-        known_encodings = cached_data['encodings']
-        known_names = cached_data['names']
-        
-        # ===== Use get_face_encodings from face_utils.py =====
-        # This function handles both HOG and DNN detection with optimization
-        face_locations, face_encodings = get_face_encodings(
-            frame,
-            model=os.environ.get('FACE_DETECTION_MODEL', 'hog'),
-            scale=SCALE_FACTOR,
-            min_size=MIN_FACE_SIZE,
-            dnn_net=None  # Could be loaded if needed for production
-        )
-        
-        if not face_locations or not face_encodings:
-            elapsed = time.time() - start_time
-            return JsonResponse({
-                "status": "ok",
-                "message": "No faces detected",
-                "face_count": 0,
-                "queued": bool(active_session_id),
-                "processing_ms": round(elapsed * 1000, 1)
-            })
-
-        # ===== Use matches_face_encoding from face_utils.py =====
-        # This provides consistent matching logic with session awareness
-        face_names = []
-        face_distances = []
-        
-        for face_encoding in face_encodings:
-            # Use face_utils matching function for consistency with recognition_runner
-            name, distance, idx, is_known = matches_face_encoding(
-                face_encoding,
-                known_encodings,
-                known_names,
-                unknown_encodings=None,  # No persistent unknown cache in HTTP context
-                tolerance=TOLERANCE
-            )
-            
-            face_names.append(name)
-            face_distances.append(distance)
-
-        # Build response
-        results = [
-            {
-                "name": name,
-                "distance": distance,
-                "box": {
-                    "top": int(loc[0]),
-                    "right": int(loc[1]),
-                    "bottom": int(loc[2]),
-                    "left": int(loc[3])
-                }
-            }
-            for name, distance, loc in zip(face_names, face_distances, face_locations)
-        ]
-
-        elapsed = time.time() - start_time
-        return JsonResponse({
-            "status": "ok",
-            "message": f"Processed {len(face_encodings)} face(s)",
-            "face_count": len(face_encodings),
-            "queued": bool(active_session_id),
-            "results": results,
-            "processing_ms": round(elapsed * 1000, 1)  # Show processing time
-        })
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({
-            "status": "error",
-            "message": str(e)
-        }, status=500)
-
 
 @api_view(['GET'])
 def get_people_with_encodings(request):
