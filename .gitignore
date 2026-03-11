@@ -195,3 +195,5 @@ facetrack-frontend/node_modules
 *.HEIC
 *.webp
  
+ .vscode
+ 
