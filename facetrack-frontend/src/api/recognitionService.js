@@ -1,6 +1,11 @@
 import apiClient from './client';
 
 export const recognitionService = {
+    // -----------------------------------------------------------------------
+    // Info
+    // -----------------------------------------------------------------------
+    getInfo: () => apiClient.get('/info/'),
+
     enrollStudent: (formData) =>
         apiClient.post('/enroll/', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },

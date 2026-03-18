@@ -19,7 +19,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.core.cache import cache
 from django.db import ProgrammingError
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from recognition.forms import PersonForm, SessionForm
 from recognition.face_utils import (
@@ -491,15 +491,34 @@ def delete_roster(request, roster_id):
 
 
 @api_view(['GET'])
+@permission_classes([])
 def index(request):
     """Home page info endpoint"""
     return Response({
-        'title': 'FaceTrack Lite API',
-        'message': 'Welcome to FaceTrack Lite: a system that recognizes faces and keeps sessions organized.',
+        'title': 'FaceTrack',
         'version': '2.0',
+        'tagline': 'Real-time facial recognition and attendance tracking',
+        'description': 'A system that uses HOG/DNN-based face detection and 128-dimensional face encodings to identify individuals and record attendance in real time.',
+        'features': [
+            {
+                'icon': 'camera-video',
+                'title': 'Face Detection & Encoding',
+                'description': 'HOG and DNN-based detection with 128-d face encodings for accurate identification across varying conditions.'
+            },
+            {
+                'icon': 'shield-check',
+                'title': 'Roster-Based Sessions',
+                'description': 'Scope recognition to expected attendees per session. Track present, absent, and unidentified faces with full audit logs.'
+            },
+            {
+                'icon': 'lightning-fill',
+                'title': 'Real-Time Processing',
+                'description': 'Background recognition thread processes frames from a queue with configurable tolerance and frame-skip settings.'
+            },
+        ],
         'endpoints': {
             'enroll': '/api/enroll/',
-            'sessions': '/api/sessions/'
+            'sessions': '/api/sessions/',
         }
     })
 
