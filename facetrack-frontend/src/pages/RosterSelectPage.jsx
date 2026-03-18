@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { recognitionService } from '../api/recognitionService';
+import './RosterSelectPage.css';
 
 export function RosterSelectPage() {
     const { sessionId } = useParams();

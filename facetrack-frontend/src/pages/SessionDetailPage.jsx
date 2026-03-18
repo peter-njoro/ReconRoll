@@ -289,28 +289,6 @@ export function SessionDetailPage() {
     return (
         <div className="session-detail">
             <div className="session-detail-container">
-                <div className="session-detail-header">
-                    <h1 className="session-detail-title">{session.name}</h1>
-                    <div className="session-detail-info">
-                        <div className="detail-info-item">
-                            <div className="detail-info-label">Status</div>
-                            <div className="detail-info-value">
-                                <span className={`status-badge ${session.status === 'in_progress' ? 'running' : 'stopped'}`}>
-                                    {session.status === 'in_progress' ? '🟢 Running' : '🔴 Stopped'}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="detail-info-item">
-                            <div className="detail-info-label">Type</div>
-                            <div className="detail-info-value">{session.session_type || 'N/A'}</div>
-                        </div>
-                        <div className="detail-info-item">
-                            <div className="detail-info-label">Created At</div>
-                            <div className="detail-info-value">{new Date(session.created_at).toLocaleDateString()}</div>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Webcam Section */}
                 <div className="webcam-section">
                     <h2><i className="bi bi-camera-video"></i> Live Camera Feed</h2>
