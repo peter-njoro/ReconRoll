@@ -122,7 +122,7 @@ export function EnrollmentForm() {
 
     return (
         <div className="auth-page">
-            <div className="auth-card">
+            <div className="auth-card auth-card-wide">
                 <div className="auth-header">
                     <p className="auth-eyebrow">Enrollment</p>
                     <h1 className="auth-title">Enroll a person</h1>
@@ -254,27 +254,29 @@ export function EnrollmentForm() {
 
                     <div className="field">
                         <span>Face images *</span>
-                        <input
-                            type="file"
-                            id="images"
-                            multiple
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            disabled={loading}
-                        />
+                        <label className="file-upload-label">
+                            <i className="bi bi-upload"></i>
+                            {images.length > 0 ? `${images.length} image${images.length !== 1 ? 's' : ''} selected` : 'Click to upload images'}
+                            <input
+                                type="file"
+                                id="images"
+                                multiple
+                                accept="image/*"
+                                onChange={handleImageChange}
+                                disabled={loading}
+                                style={{ display: 'none' }}
+                            />
+                        </label>
 
                         {images.length > 0 && (
                             <div className="selected-images">
-                                <p className="selected-count">
-                                    {images.length} image{images.length !== 1 ? 's' : ''} selected
-                                </p>
                                 <div className="image-list">
                                     {images.map((image, index) => (
                                         <div key={index} className="image-item">
                                             <div className="image-info">
                                                 <span className="image-name">{image.name}</span>
                                                 <span className="image-size">
-                                                    {(image.size / 1024).toFixed(2)} KB
+                                                    {(image.size / 1024).toFixed(1)} KB
                                                 </span>
                                             </div>
                                             <button
@@ -282,9 +284,8 @@ export function EnrollmentForm() {
                                                 className="remove-image-btn"
                                                 onClick={() => removeImage(index)}
                                                 disabled={loading}
-                                                title="Remove this image"
                                             >
-                                                Remove
+                                                <i className="bi bi-x"></i>
                                             </button>
                                         </div>
                                     ))}
