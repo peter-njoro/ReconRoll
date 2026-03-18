@@ -1,6 +1,4 @@
 import threading
-import cv2
-import numpy as np
 import base64
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
@@ -11,8 +9,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.shortcuts import get_object_or_404
-from .models import Session, Person, Event, AttendanceSummary, UnidentifiedFace
-from .serializers import SessionSerializer, PersonSerializer, EventSerializer
+from .models import Session, Person, UnidentifiedFace, AttendanceSummary
+from .serializers import SessionSerializer, PersonSerializer
 from .recognition_runner import active_recognition, frame_queue
 
 
@@ -50,95 +48,6 @@ class SessionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Automatically set the created_by user when creating a session"""
         serializer.save(created_by=self.request.user)
-
-    @action(detail=True, methods=['get'])
-    def status(self, request, pk=None):
-        """Get current status of a session"""
-        session = self.get_object()
-        active_data = active_recognition.get(str(pk), {})
-        thread = active_data.get('thread')
-        is_running = bool(thread and thread.is_alive())
-
-        return Response({
-            'id': session.id,
-            'name': session.name,
-            'status': session.status,
-            'present_count': get_present_records(session).count(),
-            'expected_count': get_expected_count(session),
-            'unknown_count': session.unidentified_faces.count(),
-            'is_running': is_running
-        })
-
-    @action(detail=True, methods=['get'])
-    def events(self, request, pk=None):
-        """Get all events for a session"""
-        session = self.get_object()
-        events = Event.objects.filter(session=session).order_by('-timestamp')[:50]
-        serializer = EventSerializer(events, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['get'])
-    def present(self, request, pk=None):
-        """Get all present people for a session"""
-        session = self.get_object()
-        present_people = Person.objects.filter(
-            attendance_records__session=session,
-            attendance_records__status__in=['present', 'late']
-        ).distinct()
-        serializer = PersonSerializer(present_people, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['get'])
-    def absent(self, request, pk=None):
-        """Get all absent people for a session"""
-        session = self.get_object()
-        
-        # Get expected people from roster if available
-        if session.roster:
-            expected_people = session.roster.people.all()
-        else:
-            return Response([])
-
-        present_ids = set(
-            get_present_records(session).values_list('person_id', flat=True)
-        )
-        absent_people = expected_people.exclude(id__in=present_ids)
-        serializer = PersonSerializer(absent_people, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['get'])
-    def progress(self, request, pk=None):
-        """Get attendance progress for a session"""
-        session = self.get_object()
-        present_count = get_present_records(session).count()
-        expected_count = get_expected_count(session)
-        unidentified_count = session.unidentified_faces.count()
-        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
-
-        return Response({
-            'present_count': present_count,
-            'expected_count': expected_count,
-            'unidentified_count': unidentified_count,
-            'attendance_percentage': attendance_percentage,
-            'total_expected': expected_count,
-            'unknown_count': unidentified_count
-        })
-
-    @action(detail=True, methods=['get'])
-    def unidentified(self, request, pk=None):
-        """Get all unidentified faces for a session"""
-        session = self.get_object()
-        unidentified_faces = UnidentifiedFace.objects.filter(session=session).order_by('-timestamp')
-
-        return Response([
-            {
-                'id': face.id,
-                'cropped_face': request.build_absolute_uri(face.cropped_face.url) if face.cropped_face else None,
-                'full_frame': request.build_absolute_uri(face.full_frame.url) if face.full_frame else None,
-                'timestamp': face.timestamp.isoformat() if face.timestamp else None
-            }
-            for face in unidentified_faces
-        ])
 
     @action(detail=True, methods=['post'])
     def upload_frame(self, request, pk=None):

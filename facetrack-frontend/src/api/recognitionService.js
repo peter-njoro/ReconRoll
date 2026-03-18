@@ -94,12 +94,12 @@ export const recognitionService = {
     // in response.data, matching what SessionDetailPage expects.
     // -----------------------------------------------------------------------
 
-    getPresentStudents: (sessionId) =>
+    getPresentPeople: (sessionId) =>
         apiClient
             .get(`/session/${sessionId}/present_partial/`)
             .then((res) => ({ ...res, data: res.data.present_people })),
 
-    getAbsentStudents: (sessionId) =>
+    getAbsentPeople: (sessionId) =>
         apiClient
             .get(`/session/${sessionId}/absent_partial/`)
             .then((res) => ({ ...res, data: res.data.absent_people })),

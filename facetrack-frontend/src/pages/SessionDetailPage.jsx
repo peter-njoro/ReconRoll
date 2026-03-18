@@ -5,8 +5,8 @@ import { recognitionService } from '../api/recognitionService';
 export function SessionDetailPage() {
     const { sessionId } = useParams();
     const [session, setSession] = useState(null);
-    const [presentStudents, setPresentStudents] = useState([]);
-    const [absentStudents, setAbsentStudents] = useState([]);
+    const [presentPeople, setPresentPeople] = useState([]);
+    const [absentPeople, setAbsentPeople] = useState([]);
     const [unidentifiedFaces, setUnidentifiedFaces] = useState([]);
     const [events, setEvents] = useState([]);
     const [progress, setProgress] = useState(null);
@@ -30,16 +30,16 @@ export function SessionDetailPage() {
         try {
             const [sessionRes, presentRes, absentRes, eventsRes, progressRes, unidentifiedRes] = await Promise.all([
                 recognitionService.getSession(sessionId),
-                recognitionService.getPresentStudents(sessionId),
-                recognitionService.getAbsentStudents(sessionId),
+                recognitionService.getPresentPeople(sessionId),
+                recognitionService.getAbsentPeople(sessionId),
                 recognitionService.getSessionEvents(sessionId),
                 recognitionService.getProgress(sessionId),
                 recognitionService.getUnidentifiedFaces(sessionId),
             ]);
 
             setSession(sessionRes.data);
-            setPresentStudents(presentRes.data || []);
-            setAbsentStudents(absentRes.data || []);
+            setPresentPeople(presentRes.data || []);
+            setAbsentPeople(absentRes.data || []);
             setEvents(eventsRes.data || []);
             setProgress(progressRes.data || null);
             setUnidentifiedFaces(unidentifiedRes.data || []);
@@ -480,12 +480,12 @@ export function SessionDetailPage() {
                     </div>
                 )}
 
-                <div className="students-section">
-                    <div className="students-list">
-                        <h3><i className="bi bi-check-circle"></i> Present ({presentStudents.length})</h3>
-                        {presentStudents.length > 0 ? (
+                <div className="people-section">
+                    <div className="people-list">
+                        <h3><i className="bi bi-check-circle"></i> Present ({presentPeople.length})</h3>
+                        {presentPeople.length > 0 ? (
                             <ul>
-                                {presentStudents.map(person => (
+                                {presentPeople.map(person => (
                                     <li key={person.id}>
                                         <i className="bi bi-person-check"></i> {person.name || person.full_name} ({person.identification_number || 'N/A'})
                                     </li>
@@ -496,11 +496,11 @@ export function SessionDetailPage() {
                         )}
                     </div>
 
-                    <div className="students-list">
-                        <h3><i className="bi bi-x-circle"></i> Absent ({absentStudents.length})</h3>
-                        {absentStudents.length > 0 ? (
+                    <div className="people-list">
+                        <h3><i className="bi bi-x-circle"></i> Absent ({absentPeople.length})</h3>
+                        {absentPeople.length > 0 ? (
                             <ul>
-                                {absentStudents.map(person => (
+                                {absentPeople.map(person => (
                                     <li key={person.id}>
                                         <i className="bi bi-person-x"></i> {person.name || person.full_name} ({person.identification_number || 'N/A'})
                                     </li>

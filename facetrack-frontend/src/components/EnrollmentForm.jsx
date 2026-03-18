@@ -141,7 +141,7 @@ export function EnrollmentForm() {
                 {person && (
                     <div className="success-info-card">
                         <h3 className="success-title">Enrollment successful</h3>
-                        <div className="student-details">
+                        <div className="person-details">
                             <p><strong>Name:</strong> {person.name}</p>
                             <p><strong>Encodings:</strong> {person.encodings_count}</p>
                         </div>

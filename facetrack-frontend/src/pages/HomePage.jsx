@@ -8,8 +8,6 @@ export function HomePage() {
     const [info, setInfo] = useState(null);
     const { isAuthenticated } = useAuth();
 
-    const routeMap = { enroll: '/enroll', sessions: '/sessions' };
-
     useEffect(() => {
         recognitionService.getInfo()
             .then(res => setInfo(res.data))
