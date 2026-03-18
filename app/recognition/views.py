@@ -274,9 +274,10 @@ def create_roster(request):
     
     Request body:
     {
-        'name': 'string (required)',
+        'name': 'string (optional, auto-generated if session_id provided)',
         'description': 'string (optional)',
-        'person_ids': ['uuid1', 'uuid2', ...] (optional)
+        'person_ids': ['uuid1', 'uuid2', ...] (optional),
+        'session_id': 'uuid (optional) - assign roster to this session after creation'
     }
     """
     if not isinstance(request.data, dict):
@@ -288,7 +289,15 @@ def create_roster(request):
     data = request.data
     
     try:
+        session_id = data.get('session_id')
+        session = None
+        if session_id:
+            session = get_object_or_404(Session, id=session_id)
+
         name = data.get('name', '').strip()
+        # Auto-generate a name when creating a session-specific roster
+        if not name and session:
+            name = f"Roster for {session.name}"
         description = data.get('description', '').strip()
         person_ids = data.get('person_ids', [])
         
@@ -332,6 +341,11 @@ def create_roster(request):
         if people:
             roster.people.set(people)
         
+        # Assign roster to session if session_id was provided
+        if session:
+            session.roster = roster
+            session.save(update_fields=['roster'])
+
         return Response({
             'status': 'success',
             'message': f'Roster "{name}" created successfully',

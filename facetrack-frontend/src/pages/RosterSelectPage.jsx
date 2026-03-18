@@ -80,7 +80,7 @@ export function RosterSelectPage() {
         setError(null);
 
         try {
-            await recognitionService.createRoster(sessionId, selectedIds, true);
+            await recognitionService.createRosterForSession(sessionId, selectedIds);
             navigate(`/session/${sessionId}`);
         } catch (err) {
             console.error('Error creating roster:', err);
