@@ -189,7 +189,7 @@ backend/app/media/*
 
 # Collected static files (Django collectstatic output)
 backend/app/staticfiles/*
-
+app/staticfiles/*
 
 facetrack-frontend/node_modules
 
