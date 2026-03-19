@@ -57,6 +57,17 @@ export function SessionDetailPage() {
     const startWebcam = async () => {
         try {
             setWebcamError(null);
+
+            // mediaDevices is only available in secure contexts (HTTPS or localhost).
+            // Over plain HTTP on an external IP the browser blocks it entirely.
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setWebcamError(
+                    'Camera access requires a secure connection (HTTPS). ' +
+                    'Please access this page over HTTPS or use localhost.'
+                );
+                return;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
             });
@@ -67,7 +78,13 @@ export function SessionDetailPage() {
             }
         } catch (err) {
             console.error('Error accessing webcam:', err);
-            setWebcamError('Failed to access webcam. Please ensure camera permissions are granted.');
+            if (err.name === 'NotAllowedError') {
+                setWebcamError('Camera permission denied. Please allow camera access in your browser settings.');
+            } else if (err.name === 'NotFoundError') {
+                setWebcamError('No camera found. Please connect a camera and try again.');
+            } else {
+                setWebcamError('Failed to access webcam: ' + err.message);
+            }
         }
     };
 
@@ -106,8 +123,10 @@ export function SessionDetailPage() {
         if (!sessionId) { setError('Session ID is missing.'); return; }
         try {
             setError(null);
-            await recognitionService.startSession(sessionId);
             await startWebcam();
+            // startWebcam sets webcamError and returns early if mediaDevices unavailable
+            if (!streamRef.current) return;
+            await recognitionService.startSession(sessionId);
             setIsProcessing(true);
             isProcessingRef.current = true;
 
@@ -280,8 +299,8 @@ export function SessionDetailPage() {
                     <div className="unidentified-section">
                         <h2><i className="bi bi-question-circle"></i> Unidentified Faces ({unidentifiedFaces.length})</h2>
                         <div className="unidentified-grid">
-                            {unidentifiedFaces.map(face => (
-                                <div key={face.id} className="unidentified-item">
+                            {unidentifiedFaces.map((face, i) => (
+                                <div key={face.id ?? i} className="unidentified-item">
                                     {face.cropped_face && (
                                         <img src={face.cropped_face} alt="Unidentified face" />
                                     )}
@@ -334,8 +353,8 @@ export function SessionDetailPage() {
                     <div className="events-section">
                         <h2><i className="bi bi-clock-history"></i> Recent Events ({events.length})</h2>
                         <div className="events-list">
-                            {events.map(event => (
-                                <div key={event.id} className={`event ${event.severity || 'info'}`}>
+                            {events.map((event, i) => (
+                                <div key={event.id ?? i} className={`event ${event.severity || 'info'}`}>
                                     <span className="type">[{event.event_type}]</span>
                                     <span className="message">{event.message}</span>
                                     <span className="time">{new Date(event.timestamp).toLocaleTimeString()}</span>
