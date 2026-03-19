@@ -8,20 +8,25 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Check if user is already logged in on mount
+  // On mount, restore session from stored token
   useEffect(() => {
     const checkAuth = async () => {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       try {
         const userData = await authService.getProfile();
         setUser(userData);
-      } catch (err) {
-        // User not authenticated
+      } catch {
+        // Token invalid or expired — clear it
+        localStorage.removeItem('authToken');
         setUser(null);
       } finally {
         setLoading(false);
       }
     };
-
     checkAuth();
   }, []);
 
@@ -30,6 +35,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const data = await authService.login({ email, password });
+      localStorage.setItem('authToken', data.token);
       setUser(data.user);
       return data;
     } catch (err) {
@@ -45,6 +51,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const data = await authService.signup(userData);
+      localStorage.setItem('authToken', data.token);
       setUser(data.user);
       return data;
     } catch (err) {
@@ -60,11 +67,11 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       await authService.logout();
-      setUser(null);
-    } catch (err) {
-      setError(err.message || 'Logout failed');
-      throw err;
+    } catch {
+      // logout endpoint may 401 if token already gone — that's fine
     } finally {
+      localStorage.removeItem('authToken');
+      setUser(null);
       setLoading(false);
     }
   };
@@ -84,10 +91,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const isAuthenticated = !!user;
-
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, signup, logout, setUsername, isAuthenticated }}>
+    <AuthContext.Provider value={{
+      user, loading, error,
+      login, signup, logout, setUsername,
+      isAuthenticated: !!user
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -95,8 +104,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };

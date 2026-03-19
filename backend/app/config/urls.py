@@ -22,11 +22,19 @@ from django.middleware.csrf import get_token
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from recognition.api import SessionViewSet, StudentViewSet
 
 router = DefaultRouter()
 router.register(r'sessions', SessionViewSet, basename='session')
 router.register(r'students', StudentViewSet, basename='student')
+
+@ensure_csrf_cookie
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def csrf_view(request):
+    return JsonResponse({'csrfToken': get_token(request)})
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -34,9 +42,13 @@ urlpatterns = [
         path('', include(router.urls)),
         path('', include('recognition.urls')),
         path('', include('users.urls')),
+        path('csrf/', csrf_view),   # issues + refreshes the CSRF cookie
     ])),
-    path('api/csrf/', ensure_csrf_cookie(lambda request: JsonResponse({'csrfToken': get_token(request)}))),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # Serve media files in development
 if settings.DEBUG:

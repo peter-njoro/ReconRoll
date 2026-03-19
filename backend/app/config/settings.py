@@ -36,12 +36,14 @@ INSTALLED_APPS = [
     'django_bootstrap5',
     'django_htmx',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
     # my apps
     'recognition',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # must be first
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -50,13 +52,19 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-csrftoken",
 ]
+
+# Cookie settings — SameSite=None (no attribute) allows cross-port cookies over HTTP in dev.
+# When HTTPS is set up, switch to SESSION_COOKIE_SAMESITE = 'None' + SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_SAMESITE = None   # Python None = omit the SameSite attribute entirely
+CSRF_COOKIE_SAMESITE = None
+SESSION_COOKIE_SECURE = False    # set True when behind HTTPS
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False     # frontend JS needs to read the csrftoken cookie
 
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost").split(",")
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
@@ -64,7 +72,8 @@ CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',  # keep for admin/browsable API
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

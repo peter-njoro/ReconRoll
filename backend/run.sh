@@ -2,7 +2,7 @@
 # run.sh - Prepare and launch your container environment with display support (Wayland/X11)
 # Updates only relevant variables in .env instead of overwriting the file.
 
-ENV_FILE=".env"
+ENV_FILE="$(dirname "$0")/.env"
 
 # Helper function to add or update a key=value pair
 update_env_var() {
@@ -61,5 +61,5 @@ else
 fi
 
 echo "[▶] Starting Docker Compose with display access..."
-docker compose -f docker-compose.linux.yml up -d
+docker compose -f "$(dirname "$0")/docker-compose.linux.yml" up -d
 
