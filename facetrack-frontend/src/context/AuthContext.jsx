@@ -25,11 +25,11 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await authService.login({ username, password });
+      const data = await authService.login({ email, password });
       setUser(data.user);
       return data;
     } catch (err) {
@@ -69,10 +69,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const setUsername = async (username) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await authService.setUsername({ username });
+      setUser(data.user || data);
+      return data;
+    } catch (err) {
+      setError(err.response?.data || 'Update failed');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, signup, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, loading, error, login, signup, logout, setUsername, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,11 +1,11 @@
 import os
 import cv2
+import io
 import uuid
 import numpy as np
 import face_recognition
-from recognition.models import Student, UnidentifiedFace
+from recognition.models import Person, UnidentifiedFace
 from django.conf import settings
-from collections import defaultdict, deque
 
 
 def load_known_encodings_from_db(session=None):
@@ -13,8 +13,8 @@ def load_known_encodings_from_db(session=None):
     Load known face encodings from database.
     
     Args:
-        session: Session object (optional). If provided and has class_group,
-                 only load students from that class group. Otherwise, load all.
+        session: Session object (optional). If provided and has expected people,
+                 only load those people. Otherwise, load all.
     
     Returns:
         (known_encodings_array, known_names_list)
@@ -22,28 +22,51 @@ def load_known_encodings_from_db(session=None):
     known_encodings = []
     known_names = []
 
-    # Determine which students to load based on session scope
-    if session and hasattr(session, 'class_group') and session.class_group:
-        students = session.class_group.students.all().prefetch_related('encodings')
-        scope_info = f"class group '{session.class_group.name}'"
+    # Determine which people to load based on session scope
+    if session:
+        # Get people from the session's roster if it exists
+        if session.roster:
+            people = session.roster.people.prefetch_related('face_encodings')
+            scope_info = f"roster '{session.roster.name}' for session {session.id}"
+        else:
+            # Fallback to all people if no roster is set
+            people = Person.objects.all().prefetch_related('face_encodings')
+            scope_info = "all people (no roster set for session)"
     else:
-        students = Student.objects.all().prefetch_related('encodings')
-        scope_info = "all students (no session filter)"
+        people = Person.objects.all().prefetch_related('face_encodings')
+        scope_info = "all people (no session filter)"
     
-    print(f"[INFO] Loading face encodings for {scope_info} ({students.count()} students)")
+    print(f"[INFO] Loading face encodings for {scope_info} ({people.count()} people)")
 
-    for student in students:
-        for encoding_obj in student.encodings.all():
-            path = os.path.join(settings.BASE_DIR, encoding_obj.file_path)
-            try:
-                encoding = np.load(path)
-                known_encodings.append(encoding)
-                known_names.append(student.full_name)
-            except Exception as e:
-                print(f"[WARNING] Failed to load encoding for {student.full_name}: {e}")
+    for person in people:
+        for encoding_obj in person.face_encodings.all():
+            encoding = decode_face_encoding(encoding_obj)
+            if encoding is None:
+                continue
+            known_encodings.append(encoding)
+            known_names.append(person.get_full_name())
 
     print(f"[INFO] Loaded {len(known_encodings)} face encodings")
     return np.array(known_encodings) if known_encodings else np.array([]), known_names
+
+
+def decode_face_encoding(encoding_obj):
+    if encoding_obj.encoding:
+        try:
+            return np.load(io.BytesIO(encoding_obj.encoding), allow_pickle=False)
+        except Exception:
+            return None
+
+    if encoding_obj.image_path:
+        for base_dir in (settings.MEDIA_ROOT, settings.BASE_DIR):
+            candidate = os.path.join(str(base_dir), encoding_obj.image_path)
+            if os.path.exists(candidate):
+                try:
+                    return np.load(candidate, allow_pickle=False)
+                except Exception:
+                    return None
+
+    return None
 
 def get_face_encodings(image, model='cnn', scale=0.25, min_size=100, dnn_net=None):
     # Ensure we own the image memory to avoid sharing numpy buffers
@@ -107,10 +130,10 @@ def matches_face_encoding(encoding, known_encodings, known_names, unknown_encodi
     """
     Compare a face encoding against known and unknown encodings.
     Returns:
-      - name: student name or "unknown"
+      - name: person name or "unknown"
       - distance: best match distance
       - index: index of the match (for known) or None (for unknown)
-      - is_known: True if match was a known student, False if it's an existing unknown
+      - is_known: True if match was a known person, False if it's an existing unknown
     """
     best_name = "unknown"
     best_distance = float("inf")

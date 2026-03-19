@@ -1,6 +1,6 @@
 ---
 
-# 🌐 **ReconRoll — Intelligent Facial Recognition Attendance System**
+# **ReconRoll — Intelligent Facial Recognition Attendance System**
 
 <p align="center">
   <img src="docs/logo.svg" width="420">
@@ -21,7 +21,7 @@
 
 ---
 
-# 📑 **Table of Contents**
+#  **Table of Contents**
 
 * [Overview](#overview)
 * [Tech Stack](#tech-stack)
@@ -40,7 +40,7 @@
 
 ---
 
-# 🔍 **Overview**
+#  **Overview**
 
 **ReconRoll** is a modular, real-time facial recognition attendance system designed for automation in schools, workplaces, events, and controlled environments.
 It provides robust attendance tracking using fast face detection, deep-learning encodings, and session-based logging.
@@ -58,7 +58,7 @@ ReconRoll evolved from the earlier *FaceTrack Lite* project and demonstrates a p
 
 ---
 
-# 🧠 **Tech Stack**
+#  **Tech Stack**
 
 | Technology            | Purpose                             |
 | --------------------- | ----------------------------------- |
@@ -72,7 +72,7 @@ ReconRoll evolved from the earlier *FaceTrack Lite* project and demonstrates a p
 
 ---
 
-# 🏗️ **System Architecture**
+#  **System Architecture**
 
 ReconRoll is designed around four core subsystems:
 ![ReconRoll Architecture](docs/ReconRoll-Architecture.png)
@@ -107,7 +107,7 @@ ReconRoll is designed around four core subsystems:
 
 ---
 
-# 🔄 **Workflow**
+#  **Workflow**
 
 ### **1. Enrollment**
 
@@ -137,7 +137,7 @@ ReconRoll produces:
 
 ---
 
-# 🧩 **Key Modules**
+#  **Key Modules**
 
 | Module                         | Role                                       |
 | ------------------------------ | ------------------------------------------ |
@@ -149,14 +149,14 @@ ReconRoll produces:
 
 ---
 
-# 🚀 **Installation & Setup**
+#  **Installation & Setup**
 
 Before running, you may review the **Pre-Installation Guide**:
 [https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing)
 
 ---
 
-## 🐳 **Docker Setup (Recommended)**
+##  **Docker Setup (Recommended)**
 ### You'll need to run docker on a linux distribution host for this 
 
 ```bash
@@ -180,7 +180,7 @@ http://localhost:8000
 
 ---
 
-## 🛠️ **Manual Setup** (traditional method)
+##  **Manual Setup** (traditional method)
 
 ```bash
 git clone https://github.com/peter-njoro/ReconRoll.git
@@ -195,7 +195,7 @@ python manage.py runserver
 
 ---
 
-# 👁️ **How It Works (Simple)**
+#  **How It Works (Simple)**
 
 1. Camera captures input
 2. Face detected
@@ -204,7 +204,7 @@ python manage.py runserver
 
 ---
 
-# 🤝 **Contributing**
+#  **Contributing**
 
 Contributions are welcome!
 
@@ -214,14 +214,14 @@ Contributions are welcome!
 
 ---
 
-# ⚠️ **Disclaimer**
+#  **Disclaimer**
 
 ReconRoll is designed for **educational and demo purposes**.
 It is not ready for high-security or large-scale deployments.
 
 ---
 
-# 👤 **Author**
+#  **Author**
 
 **[Peter Njoroge Chege](https://www.linkedin.com/in/chege-peter/)**
 Machine Learning Engineer (In Progress)
@@ -231,7 +231,7 @@ Inspired by the original **Virone** concept by **[Everlyne Mwangi](https://www.l
 
 ---
 
-# 📝 **Developer Notes**
+#  **Developer Notes**
 
 If you’re reading this part:
 

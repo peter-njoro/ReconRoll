@@ -6,10 +6,22 @@ import django
 import subprocess
 import threading
 import queue
+import io
 import time
+import logging
 import face_recognition
-from datetime import datetime
 from dotenv import load_dotenv
+from django.utils import timezone
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -19,7 +31,7 @@ scale = float(os.getenv('SCALE', '0.25'))
 min_size = int(os.getenv('MIN_FACE_SIZE', '100'))
 tolerance = float(os.getenv('TOLERANCE', '0.55'))
 
-print(f"Using model={face_model}, scale={scale}, min_size={min_size}, tolerance={tolerance}")
+logger.info(f"Using model={face_model}, scale={scale}, min_size={min_size}, tolerance={tolerance}")
 
 # Setup Django
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +39,7 @@ sys.path.append(BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from recognition.models import Session, Student, AttendanceRecord, UnidentifiedFace, Event
+from recognition.models import Session, Person, AttendanceSummary, UnidentifiedFace, Event
 from recognition.face_utils import (
     get_face_encodings, matches_face_encoding,
     save_unidentified_faces, load_known_encodings_from_db,
@@ -41,8 +53,35 @@ active_recognition = {}  # e.g., {session_id: {"thread": thread, "stop_flag": St
 frame_queue = queue.Queue(maxsize=30)  # Keep last 30 frames
 
 
+def split_full_name(full_name):
+    parts = full_name.strip().split()
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
+
+
+def resolve_person_from_name(name):
+    first_name, last_name = split_full_name(name)
+    if not first_name:
+        return None
+
+    person = Person.objects.filter(
+        first_name__iexact=first_name,
+        last_name__iexact=last_name
+    ).first()
+    if person:
+        return person
+
+    if not last_name:
+        return Person.objects.filter(first_name__iexact=first_name).first()
+
+    return None
+
+
 def run_recognition(session_id, video=None, dev_mode=False, stop_flag=None):
-    print(f"Starting recognition for session {session_id} | dev_mode={dev_mode}")
+    logger.info(f"Starting recognition for session {session_id} | dev_mode={dev_mode}")
 
     if dev_mode:
         # Run main.py in dev mode
@@ -57,7 +96,8 @@ def run_recognition_from_queue(session_id, stop_flag):
     Production mode: Process frames uploaded via webcam_stream.py
     OPTIMIZED for accuracy: use full num_jitters=2 for encoding, batch processing
     """
-    print(f"Production mode: Processing frames from upload queue for session {session_id}")
+    logger.info(f"Production mode: Processing frames from upload queue for session {session_id}")
+    logger.debug(f"Frame queue object ID: {id(frame_queue)}, initial size: {frame_queue.qsize()}")
     
     try:
         # Load DNN model if using DNN face detection
@@ -71,9 +111,9 @@ def run_recognition_from_queue(session_id, stop_flag):
                 print("[WARNING] Using HOG model instead of DNN")
 
         session = Session.objects.get(id=session_id)
-        # FIX #1: Pass session to scope encodings to class_group only
+        # Scope encodings to expected people for the session when possible
         known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
-        print(f"Loaded {len(known_face_encodings)} encodings for background processing")
+        logger.info(f"Loaded {len(known_face_encodings)} encodings for background processing")
 
         # Cache for previously seen unknown encodings in THIS session
         unknown_encodings = []
@@ -86,7 +126,7 @@ def run_recognition_from_queue(session_id, stop_flag):
         
         while True:
             if stop_flag and stop_flag.is_set():
-                print(f"Stop requested for session {session_id}")
+                logger.info(f"Stop requested for session {session_id}")
                 break
 
             try:
@@ -95,7 +135,9 @@ def run_recognition_from_queue(session_id, stop_flag):
                 # here to obtain an owned numpy array. Using bytes avoids passing
                 # shared numpy memory across threads which can trigger memory
                 # corruption in native libraries.
+                logger.debug(f"Waiting for frame from queue... (queue size: {frame_queue.qsize()})")
                 frame_bytes = frame_queue.get(timeout=5)
+                logger.info(f"Got frame from queue! Queue size now: {frame_queue.qsize()}")
                 # Convert frombuffer to owned array to avoid memory corruption
                 # frombuffer creates a read-only view; we need owned data for OpenCV
                 frame_array = np.frombuffer(frame_bytes, np.uint8).copy()
@@ -113,7 +155,7 @@ def run_recognition_from_queue(session_id, stop_flag):
 
                 # ===== OPTIMIZATION: Reload encodings every 500 frames (lazy reload) =====
                 # This keeps accuracy high without excessive database queries
-                # FIX #1: Pass session to reload only students in this class_group
+                # Reload encodings for expected people in this session
                 if frame_count % 500 == 0:
                     known_face_encodings, known_face_names = load_known_encodings_from_db(session=session)
                     print(f"[INFO] Reloaded {len(known_face_encodings)} encodings (frame {frame_count})")
@@ -157,31 +199,70 @@ def run_recognition_from_queue(session_id, stop_flag):
                     print(f"[INFO] Detected: {name} | Distance: {distance:.4f}")
 
                     if is_known and name != "unknown":
-                        student = Student.objects.filter(full_name=name).first()
-                        if student:
-                            record, created = AttendanceRecord.objects.get_or_create(session=session, student=student)
-                            if created:
+                        person = resolve_person_from_name(name)
+                        if person:
+                            recognized_at = timezone.now()
+                            is_late = bool(session.start_time and recognized_at > session.start_time)
+                            status_value = 'late' if is_late else 'present'
+
+                            # Use RosterAttendance if session has a roster, otherwise AttendanceSummary
+                            if session.roster:
+                                from recognition.models import RosterAttendance
+                                record, created = RosterAttendance.objects.get_or_create(
+                                    roster=session.roster,
+                                    session=session,
+                                    person=person,
+                                    defaults={
+                                        'status': status_value,
+                                        'marked_at': recognized_at
+                                    }
+                                )
+                            else:
+                                record, created = AttendanceSummary.objects.get_or_create(
+                                    session=session,
+                                    person=person,
+                                    defaults={
+                                        'status': status_value,
+                                        'marked_at': recognized_at
+                                    }
+                                )
+                            
+                            status_changed = False
+                            if not created and (record.status != status_value or record.marked_at is None):
+                                record.status = status_value
+                                record.marked_at = recognized_at
+                                record.save(update_fields=['status', 'marked_at', 'updated_at'])
+                                status_changed = True
+
+                            if created or status_changed:
                                 recognized_count += 1
                                 Event.objects.create(
                                     session=session,
-                                    student=student,
+                                    student=person,
                                     event_type='face_recognized',
                                     severity='info',
-                                    message=f"Student recognized: {student.full_name}"
+                                    message=f"Person recognized: {person.get_full_name()}"
                                 )
-                                print(f"✓ Attendance marked for {student.full_name} ({recognized_count} total)")
+                                logger.info(f"✓ Attendance marked for {person.get_full_name()} ({recognized_count} total)")
 
                     else:
-                        if idx == -1:  # brand new unknown
+                        if idx == -1:
                             cropped_path, full_path, saved_encoding = save_unidentified_faces(
                                 frame_copy, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
                             )
                             if cropped_path and full_path:
+                                encoding_bytes = None
+                                if saved_encoding is not None:
+                                    buffer = io.BytesIO()
+                                    np.save(buffer, saved_encoding)
+                                    encoding_bytes = buffer.getvalue()
+
                                 unknown_count += 1
                                 UnidentifiedFace.objects.create(
                                     session=session,
                                     cropped_face=cropped_path,
-                                    full_frame=full_path
+                                    full_frame=full_path,
+                                    encoding=encoding_bytes
                                 )
                                 Event.objects.create(
                                     session=session,
@@ -198,10 +279,10 @@ def run_recognition_from_queue(session_id, stop_flag):
             except queue.Empty:
                 # No frames in queue for 5 seconds
                 print(f"[DEBUG] Idle: no frames for 5 seconds (session {session_id})")
-                # Check if session was ended
+                # Check if session was completed or cancelled
                 session.refresh_from_db()
-                if session.status == 'ended':
-                    print(f"Session {session_id} has been ended externally")
+                if session.status in ['completed', 'cancelled']:
+                    print(f"Session {session_id} has been completed or cancelled externally")
                     break
                 # Otherwise, continue waiting
                 continue
@@ -214,19 +295,19 @@ def run_recognition_from_queue(session_id, stop_flag):
 
         # Session end logic
         session.refresh_from_db()
-        if session.status != 'ended':
-            session.status = 'ended'
-            session.end_time = datetime.now()
+        if session.status not in ['completed', 'cancelled']:
+            session.status = 'completed'
+            session.end_time = timezone.now()
             session.save()
             Event.objects.create(
                 session=session,
                 event_type='session_ended',
                 severity='info',
-                message=f"Session ended (production mode): {recognized_count} recognized, {unknown_count} unknown"
+                message=f"Session completed (production mode): {recognized_count} recognized, {unknown_count} unknown"
             )
-            print("✓ Session ended & logged.")
+            print("✓ Session completed & logged.")
         else:
-            print("Session already ended")
+            print("Session already completed or cancelled")
 
         print(f"✓ Recognition finished. Processed {frame_count} frames. Recognized: {recognized_count}, Unknown: {unknown_count}")
         
@@ -236,12 +317,12 @@ def run_recognition_from_queue(session_id, stop_flag):
         import traceback
         traceback.print_exc()
         
-        # Try to mark session as ended to prevent it from hanging
+        # Try to mark session as cancelled to prevent it from hanging
         try:
             session = Session.objects.get(id=session_id)
-            if session.status == 'ongoing':
-                session.status = 'ended'
-                session.end_time = datetime.now()
+            if session.status == 'in_progress':
+                session.status = 'cancelled'
+                session.end_time = timezone.now()
                 session.save()
                 Event.objects.create(
                     session=session,
@@ -249,7 +330,7 @@ def run_recognition_from_queue(session_id, stop_flag):
                     severity='error',
                     message=f"Session ended due to critical error: {str(e)}"
                 )
-                print(f"[INFO] Marked session {session_id} as ended due to error")
+                print(f"[INFO] Marked session {session_id} as cancelled due to error")
         except Exception as cleanup_error:
             print(f"[ERROR] Failed to cleanup session on error: {cleanup_error}")
 

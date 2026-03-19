@@ -22,12 +22,11 @@ from django.middleware.csrf import get_token
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from recognition.api import SessionViewSet, StudentViewSet, ClassGroupViewSet
+from recognition.api import SessionViewSet, StudentViewSet
 
 router = DefaultRouter()
 router.register(r'sessions', SessionViewSet, basename='session')
 router.register(r'students', StudentViewSet, basename='student')
-router.register(r'class-groups', ClassGroupViewSet, basename='classgroup')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

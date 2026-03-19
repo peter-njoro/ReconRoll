@@ -1,22 +1,42 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.authentication import SessionAuthentication
 import threading
+import base64
+from rest_framework import viewsets, status
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.authentication import SessionAuthentication
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from .models import Session, Student, Event, FaceEncoding, AttendanceRecord
-from .serializers import SessionSerializer, StudentSerializer, ClassGroupSerializer, EventSerializer
-from .models import ClassGroup
-from .recognition_runner import active_recognition
+from django.views.decorators.http import require_http_methods
+from django.shortcuts import get_object_or_404
+from .models import Session, Person, UnidentifiedFace, AttendanceSummary
+from .serializers import SessionSerializer, PersonSerializer
+from .recognition_runner import active_recognition, frame_queue
 
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
     """Custom authentication that disables CSRF checks for the viewset"""
+
     def enforce_csrf(self, request):
         # Override DRF's CSRF enforcement to skip CSRF checks for API clients
         return None
+
+
+def get_expected_count(session):
+    """
+    Get the expected count of people for a session.
+    Priority: 1) Roster people count, 2) Manual expected_count field
+    """
+    if session.roster:
+        return session.roster.people.count()
+    return session.expected_count or 0
+
+
+def get_present_records(session):
+    return AttendanceSummary.objects.filter(
+        session=session,
+        status__in=['present', 'late']
+    )
 
 
 class SessionViewSet(viewsets.ModelViewSet):
@@ -24,279 +44,115 @@ class SessionViewSet(viewsets.ModelViewSet):
     serializer_class = SessionSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [CsrfExemptSessionAuthentication]
-    
+
     def perform_create(self, serializer):
         """Automatically set the created_by user when creating a session"""
         serializer.save(created_by=self.request.user)
-    
+
     @action(detail=True, methods=['post'])
-    def start(self, request, pk=None):
+    def upload_frame(self, request, pk=None):
         """
-        Start recognition for a session.
-        
-        Query params:
-            - dev_mode: Set to 'true' to run in dev mode (uses main.py subprocess)
+        Upload a frame for processing (production mode).
+
+        Accepts either:
+        1. Multipart form data with 'frame' file (from frontend webcam)
+        2. JSON with base64 'frame' data (legacy)
         """
-        from .recognition_runner import run_recognition
-        from django.utils import timezone
+        import logging
+        logger = logging.getLogger(__name__)
         
         session = self.get_object()
-        dev_mode = request.query_params.get('dev_mode', 'false').lower() == 'true'
-        
-        # Check if session is already running
-        if str(pk) in active_recognition:
-            active_session = active_recognition[str(pk)]
-            if active_session.get("thread") and active_session["thread"].is_alive():
+
+        # Check if session is running
+        if session.status != 'in_progress':
+            logger.warning(f"Upload frame rejected: session {pk} not in progress (status: {session.status})")
+            return Response(
+                {'error': 'Session is not running. Start the session first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if recognition thread is active
+        if str(pk) not in active_recognition:
+            logger.warning(f"Upload frame rejected: no active recognition thread for session {pk}")
+            return Response(
+                {'error': 'Recognition thread not active. Please restart the session.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Check if this is multipart form data (from frontend webcam)
+            if request.FILES.get('frame'):
+                logger.debug(f"Received multipart frame upload for session {pk}")
+                
+                # Read the uploaded file
+                frame_file = request.FILES['frame']
+                frame_bytes = frame_file.read()
+                
+                # Add to processing queue
+                if not frame_queue.full():
+                    frame_queue.put_nowait(bytes(frame_bytes))
+                    logger.debug(f"Frame queued for session {pk}. Queue size: {frame_queue.qsize()}")
+                    return Response({
+                        'status': 'queued',
+                        'queue_size': frame_queue.qsize(),
+                        'message': 'Frame queued for processing'
+                    })
+                else:
+                    logger.warning(f"Frame queue full for session {pk}")
+                    return Response({
+                        'status': 'queue_full',
+                        'message': 'Processing queue is full. Frame skipped.'
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            
+            # Otherwise, try JSON with base64 (legacy)
+            frame_data = request.data.get('frame')
+            if not frame_data:
+                logger.debug(f"No frame data provided for session {pk}")
                 return Response(
-                    {'error': f'Recognition is already running for session: {session.subject}'},
+                    {'error': 'No frame data provided'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-        
-        # Validate session state
-        if session.status == 'ended':
-            return Response(
-                {'error': f'Cannot start session - it has already ended'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check if we have students in the class group (for non-dev mode)
-        if not dev_mode and session.class_group and session.class_group.students.count() == 0:
-            return Response(
-                {'error': f'Class group has no students. Please add students first.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check if we have any face encodings in the database (for non-dev mode)
-        if not dev_mode and not FaceEncoding.objects.exists():
-            return Response(
-                {'error': 'No face encodings found in database. Please enroll students first.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        stop_flag = threading.Event()
-        
-        try:
-            # Start recognition in a separate thread
-            t = threading.Thread(
-                target=run_recognition,
-                args=(str(pk),),
-                kwargs={
-                    'dev_mode': dev_mode,
-                    'stop_flag': stop_flag
-                },
-                name=f"RecognitionThread-{pk}-{'dev' if dev_mode else 'prod'}"
-            )
-            t.daemon = True
-            t.start()
+
+            logger.debug(f"Received JSON/base64 frame upload for session {pk}")
             
-            # Store the thread and stop flag for management
-            active_recognition[str(pk)] = {
-                "thread": t,
-                "stop_flag": stop_flag,
-                "started_at": timezone.now(),
-                "mode": "dev" if dev_mode else "prod"
-            }
-            
-            # Update session status
-            session.status = 'ongoing'
-            session.started_by = request.user if request.user.is_authenticated else None
-            session.save()
-            
-            # Log the start event
-            Event.objects.create(
-                session=session,
-                event_type='session_started',
-                severity='info',
-                message=f"Session started in {'DEV' if dev_mode else 'PRODUCTION'} mode via API"
-            )
-            
-            return Response({
-                'status': 'started',
-                'session_id': pk,
-                'subject': session.subject,
-                'mode': 'dev' if dev_mode else 'prod',
-                'message': f"Recognition started in {'DEV' if dev_mode else 'PRODUCTION'} mode"
-            })
-        
+            # Decode base64 to image
+            if ',' in frame_data:
+                # Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+                frame_data = frame_data.split(',')[1]
+
+            # Decode base64 to bytes
+            frame_bytes = base64.b64decode(frame_data)
+
+            # Add to processing queue
+            if not frame_queue.full():
+                frame_queue.put_nowait(bytes(frame_bytes))
+                logger.debug(f"Frame queued for session {pk}. Queue size: {frame_queue.qsize()}")
+                return Response({
+                    'status': 'queued',
+                    'queue_size': frame_queue.qsize(),
+                    'message': 'Frame queued for processing'
+                })
+            else:
+                logger.warning(f"Frame queue full for session {pk}")
+                return Response({
+                    'status': 'queue_full',
+                    'message': 'Processing queue is full. Frame skipped.'
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
         except Exception as e:
-            # Handle any errors during thread startup
+            logger.error(f"Failed to process frame for session {pk}: {e}", exc_info=True)
             return Response(
-                {'error': f'Failed to start recognition: {str(e)}'},
+                {'error': f'Failed to process frame: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
-    @action(detail=True, methods=['post'])
-    def stop(self, request, pk=None):
-        """Stop recognition for a session"""
-        from django.utils import timezone
-        
-        session = self.get_object()
-        
-        # Stop running thread/process if exists
-        active = active_recognition.get(str(pk))
-        if active:
-            if active.get("stop_flag"):
-                active["stop_flag"].set()
-            
-            # Also terminate subprocess if running in dev mode
-            if "process" in active and active["process"]:
-                active["process"].terminate()
-            
-            # Clean up
-            active_recognition.pop(str(pk), None)
-        
-        if session.status != 'ended':
-            session.status = 'ended'
-            session.end_time = timezone.now()
-            session.save()
-            
-            Event.objects.create(
-                session=session,
-                event_type='session_ended',
-                severity='info',
-                message="Session stopped via API"
-            )
-            
-            return Response({
-                'status': 'stopped',
-                'session_id': pk,
-                'subject': session.subject,
-                'message': f"Session '{session.subject}' ended successfully"
-            })
-        else:
-            return Response({
-                'status': 'already_ended',
-                'session_id': pk,
-                'subject': session.subject,
-                'message': f"Session was already ended"
-            })
-    
-    @action(detail=True, methods=['get'])
-    def status(self, request, pk=None):
-        session = self.get_object()
-        return Response({
-            'id': session.id,
-            'subject': session.subject,
-            'status': session.status,
-            'present_count': session.attendance_records.count(),
-            'expected_count': session.class_group.students.count() if session.class_group else 0,
-            'unknown_count': session.unidentified_faces.count(),
-            'is_running': str(pk) in active_recognition and active_recognition[str(pk)].get('thread', {}).is_alive()
-        })
-    
-    @action(detail=False, methods=['post'])
-    def stop_all(self, request):
-        """Stop all active recognition sessions (admin function)"""
-        from django.utils import timezone
-        
-        stopped_count = 0
-        for session_id, session_data in list(active_recognition.items()):
-            try:
-                session = Session.objects.get(id=session_id)
-                if session_data.get("stop_flag"):
-                    session_data["stop_flag"].set()
-                    
-                # Update session status
-                if session.status == 'ongoing':
-                    session.status = 'ended'
-                    session.end_time = timezone.now()
-                    session.save()
-                    
-                    Event.objects.create(
-                        session=session,
-                        event_type='session_ended',
-                        severity='info',
-                        message="Session stopped by admin via API"
-                    )
-                    
-                stopped_count += 1
-                
-            except Session.DoesNotExist:
-                pass
-            
-            # Clean up
-            active_recognition.pop(session_id, None)
-        
-        return Response({
-            'status': 'all_stopped',
-            'stopped_count': stopped_count,
-            'message': f"Stopped {stopped_count} active session(s)"
-        })
 
-    @action(detail=True, methods=['get'])
-    def events(self, request, pk=None):
-        """Get all events for a session"""
-        session = self.get_object()
-        events = Event.objects.filter(session=session).order_by('-timestamp')
-        serializer = EventSerializer(events, many=True)
-        return Response(serializer.data)
 
-    @action(detail=True, methods=['get'])
-    def present(self, request, pk=None):
-        """Get all present students for a session"""
-        session = self.get_object()
-        present_students = Student.objects.filter(
-            attendance_entries__session=session
-        ).distinct()
-        serializer = StudentSerializer(present_students, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['get'])
-    def absent(self, request, pk=None):
-        """Get all absent students for a session"""
-        session = self.get_object()
-        if not session.class_group:
-            return Response([])
-        
-        # Get all students in the class group
-        all_students = session.class_group.students.all()
-        # Get students who attended
-        present_ids = set(
-            Student.objects.filter(
-                attendance_entries__session=session
-            ).values_list('id', flat=True)
-        )
-        # Absent = all students - present students
-        absent_students = all_students.exclude(id__in=present_ids)
-        serializer = StudentSerializer(absent_students, many=True)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['get'])
-    def progress(self, request, pk=None):
-        """Get attendance progress for a session"""
-        session = self.get_object()
-        present_count = AttendanceRecord.objects.filter(session=session).count()
-        expected_count = session.class_group.students.count() if session.class_group else 0
-        unidentified_count = session.unidentified_faces.count()
-        attendance_percentage = round((present_count / expected_count * 100), 2) if expected_count > 0 else 0
-        
-        return Response({
-            'present_count': present_count,
-            'expected_count': expected_count,
-            'unidentified_count': unidentified_count,
-            'attendance_percentage': attendance_percentage,
-            'total_expected': expected_count,
-            'unknown_count': unidentified_count
-        })
-
-class StudentViewSet(viewsets.ModelViewSet):
-    queryset = Student.objects.all()
-    serializer_class = StudentSerializer
+class PersonViewSet(viewsets.ModelViewSet):
+    queryset = Person.objects.all()
+    serializer_class = PersonSerializer
     permission_classes = [IsAuthenticated]
     authentication_classes = [CsrfExemptSessionAuthentication]
 
 
-class ClassGroupViewSet(viewsets.ModelViewSet):
-    """API endpoint to manage ClassGroups"""
-    queryset = ClassGroup.objects.all()
-    serializer_class = ClassGroupSerializer
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [CsrfExemptSessionAuthentication]
-
-    def perform_create(self, serializer):
-        # allow creating with optional student list
-        students = serializer.validated_data.pop('students', None)
-        group = serializer.save()
-        if students:
-            group.students.set(students)
-            group.save()
+# Backwards compatibility
+StudentViewSet = PersonViewSet
