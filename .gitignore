@@ -137,6 +137,9 @@ ENV/
 env.bak/
 venv.bak/
 .env.prod
+backend/.env
+backend/.env.prod
+
 
 # Spyder project settings
 .spyderproject
@@ -175,17 +178,18 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-app/recognition/uploads/faces/*
-app/static/*
-app/recognition/uploads/unidentified/*
-app/recognition/uploads/*
-app/media/uploads/unidentified/*
+backend/app/recognition/uploads/faces/*
+backend/app/static/*
+backend/app/recognition/uploads/unidentified/*
+backend/app/recognition/uploads/*
+backend/app/media/uploads/unidentified/*
 
 
-app/media/*
+backend/app/media/*
 
 # Collected static files (Django collectstatic output)
-app/staticfiles/*
+backend/app/staticfiles/*
+
 
 facetrack-frontend/node_modules
 

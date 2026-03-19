@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
 
 # --- Install Python dependencies ---
 COPY ./app/requirements.txt /requirements.txt
+
 RUN pip install --upgrade pip && pip install -r /requirements.txt
 
 # --- Create video group + non-root user dynamically ---
