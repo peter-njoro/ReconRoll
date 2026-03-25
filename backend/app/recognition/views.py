@@ -992,6 +992,7 @@ def session_expected_people_view(request, session_id):
     })
 
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def start_session_view(request, session_id):
     """
@@ -1102,6 +1103,7 @@ def start_session_view(request, session_id):
         }, status=500)
 
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def end_session_view(request, session_id):
     """
@@ -1169,6 +1171,7 @@ def end_session_view(request, session_id):
         })
 
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def stop_all_sessions_view(request):
     """
@@ -1235,6 +1238,7 @@ def stop_all_sessions_view(request):
     })
 
 
+@csrf_exempt
 @require_http_methods(["POST", "PATCH", "PUT"])
 def update_session_view(request, session_id):
     """

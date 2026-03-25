@@ -49,7 +49,7 @@ export const recognitionService = {
     // Frame upload (DRF router)
     // -----------------------------------------------------------------------
 
-    uploadFrame: (sessionId, frameData) => {
+    uploadFrame: (sessionId, frameData, signal) => {
         if (!sessionId) {
             console.error('[uploadFrame] sessionId is missing/undefined');
             return Promise.reject(new Error('Session ID is required for frame upload'));
@@ -82,7 +82,8 @@ export const recognitionService = {
         return apiClient.post(url, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data'
-            }
+            },
+            signal,
         });
     },
 

@@ -23,6 +23,8 @@ export function SessionDetailPage() {
     const streamRef = useRef(null);
     const uploadIntervalRef = useRef(null);
     const isProcessingRef = useRef(false);
+    const uploadInFlightRef = useRef(false);  // prevent overlapping uploads
+    const abortControllerRef = useRef(null);  // cancel in-flight requests on stop
 
     const fetchData = async () => {
         try {
@@ -89,20 +91,31 @@ export function SessionDetailPage() {
     };
 
     const stopWebcam = () => {
+        // Kill the stop flag first so any in-flight interval tick bails out immediately
+        isProcessingRef.current = false;
+
+        // Abort any in-flight upload request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        uploadInFlightRef.current = false;
+
+        if (uploadIntervalRef.current) {
+            clearInterval(uploadIntervalRef.current);
+            uploadIntervalRef.current = null;
+        }
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
         if (videoRef.current) videoRef.current.srcObject = null;
         setIsWebcamActive(false);
-        if (uploadIntervalRef.current) {
-            clearInterval(uploadIntervalRef.current);
-            uploadIntervalRef.current = null;
-        }
     };
 
     const captureAndUploadFrame = async () => {
         if (!sessionId || !isProcessingRef.current) return;
+        if (uploadInFlightRef.current) return;  // previous upload still pending, skip this tick
         if (!videoRef.current || !canvasRef.current) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
@@ -112,10 +125,18 @@ export function SessionDetailPage() {
         canvas.height = video.videoHeight;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const frameData = canvas.toDataURL('image/jpeg', 0.8);
+
+        uploadInFlightRef.current = true;
+        abortControllerRef.current = new AbortController();
         try {
-            await recognitionService.uploadFrame(sessionId, frameData);
+            await recognitionService.uploadFrame(sessionId, frameData, abortControllerRef.current.signal);
         } catch (err) {
-            console.error('[uploadFrame] Error:', err.message);
+            if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+                console.error('[uploadFrame] Error:', err.message);
+            }
+        } finally {
+            uploadInFlightRef.current = false;
+            abortControllerRef.current = null;
         }
     };
 
