@@ -142,4 +142,8 @@ else
 fi
 
 echo "Starting uWSGI server using uwsgi.ini configuration..."
-exec uwsgi --ini /app/uwsgi.ini
+if [ "$DJANGO_MODE" = "production" ]; then
+    exec uwsgi --ini /app/uwsgi.prod.ini
+else
+    exec uwsgi --ini /app/uwsgi.ini
+fi

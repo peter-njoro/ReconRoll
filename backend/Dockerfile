@@ -42,6 +42,11 @@ RUN mkdir -p /vol/static /vol/media /var/log/uwsgi && \
     chmod -R 775 /vol/static /vol/media && \
     chmod -R 777 /var/log/uwsgi
 
+# --- Copy app code and scripts into the image ---
+COPY ./app /app
+COPY ./scripts/scripts.sh /scripts/scripts.sh
+RUN chmod +x /scripts/scripts.sh && chown -R user:user /app
+
 # --- Working directory ---
 WORKDIR /app
 
