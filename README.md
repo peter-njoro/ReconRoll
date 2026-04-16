@@ -105,6 +105,12 @@ Enrolled face images and unidentified face captures are written to `MEDIA_ROOT` 
 
 ---
 
+## API Documentation
+
+A full API reference is available in [`docs/api.md`](docs/api.md). An OpenAPI 3.0 spec is also available at [`docs/openapi.yaml`](docs/openapi.yaml) — load it into Swagger UI, Redoc, or Postman to browse and test endpoints interactively.
+
+---
+
 ## Deployment
 
 ### Docker (Recommended)
