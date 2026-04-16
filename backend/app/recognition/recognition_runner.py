@@ -248,7 +248,7 @@ def run_recognition_from_queue(session_id, stop_flag):
                     else:
                         if idx == -1:
                             cropped_path, full_path, saved_encoding = save_unidentified_faces(
-                                frame_copy, face_locations[i], session=session, base_dir='uploads/unidentified/', encoding=face_encoding
+                                frame_copy, face_locations[i], session=session, base_dir='unidentified/', encoding=face_encoding
                             )
                             if cropped_path and full_path:
                                 encoding_bytes = None

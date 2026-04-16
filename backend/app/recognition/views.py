@@ -21,12 +21,12 @@ from django.core.cache import cache
 from django.db import ProgrammingError
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from recognition.forms import PersonForm, SessionForm
-from recognition.face_utils import (
+from .forms import PersonForm, SessionForm
+from .face_utils import (
     get_face_encodings, 
     matches_face_encoding
 )
-from recognition.models import (
+from .models import (
     FaceEncoding,
     Session,
     AttendanceSummary,
@@ -36,7 +36,7 @@ from recognition.models import (
     Roster,
     RosterAttendance,
 )
-from recognition.recognition_runner import run_recognition, active_recognition, frame_queue
+from .recognition_runner import run_recognition, active_recognition, frame_queue
 import time
 
 # Configure logging
@@ -1062,15 +1062,18 @@ def start_session_view(request, session_id):
             name=f"RecognitionThread-{session_id}-{'dev' if dev_mode else 'prod'}",
         )
         t.daemon = True
-        t.start()
 
-        # Register in the global dict so stop / status can find it later
+        # Register BEFORE starting the thread and saving session status so that
+        # upload_frame requests arriving immediately after the DB status flips to
+        # 'in_progress' always find the entry in active_recognition.
         active_recognition[str(session_id)] = {
             "thread": t,
             "stop_flag": stop_flag,
             "started_at": timezone.now(),
             "mode": "dev" if dev_mode else "prod",
         }
+
+        t.start()
 
         # ------------------------------------------------------------------
         # 6. Persist status change

@@ -19,10 +19,17 @@ export const AuthProvider = ({ children }) => {
       try {
         const userData = await authService.getProfile();
         setUser(userData);
-      } catch {
-        // Token invalid or expired — clear it
-        localStorage.removeItem('authToken');
-        setUser(null);
+      } catch (err) {
+        // Only clear the token if the server explicitly rejects it (401/403).
+        // Network errors, timeouts, or server errors should NOT wipe auth state —
+        // the token may still be valid and the user would be silently logged out.
+        const status = err?.response?.status;
+        if (status === 401 || status === 403) {
+          localStorage.removeItem('authToken');
+          setUser(null);
+        }
+        // For any other error (network down, 5xx, etc.) keep the token and
+        // leave user as null — the interceptor will still attach it to requests.
       } finally {
         setLoading(false);
       }

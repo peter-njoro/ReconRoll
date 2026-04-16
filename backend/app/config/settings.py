@@ -167,7 +167,7 @@ AUTH_USER_MODEL = 'users.User'
 
 LOGIN_URL = "/users/login/"
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', str(BASE_DIR / 'media')))
 
 MEDIA_ROOT.mkdir(exist_ok=True)
 STATIC_ROOT.mkdir(exist_ok=True)
