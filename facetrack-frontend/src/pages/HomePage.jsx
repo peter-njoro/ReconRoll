@@ -21,7 +21,7 @@ export function HomePage() {
             <section className="home-hero">
                 <div className="home-hero-content">
                     <span className="home-badge">v{info?.version ?? '—'}</span>
-                    <h1 className="home-title">{info?.title ?? 'FaceTrack'}</h1>
+                    <h1 className="home-title">{info?.title ?? 'ReconRoll'}</h1>
                     <p className="home-tagline">{info?.tagline ?? ''}</p>
                     <p className="home-desc">{info?.description ?? ''}</p>
                     <div className="home-actions">

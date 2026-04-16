@@ -35,7 +35,7 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="navbar-inner container">
         <Link className="navbar-brand" to="/" onClick={close}>
-          <i className="bi bi-camera-video"></i> FaceTrack
+          <i className="bi bi-camera-video"></i> ReconRoll
         </Link>
 
         <button

@@ -509,10 +509,10 @@ def delete_roster(request, roster_id):
 def index(request):
     """Home page info endpoint"""
     return Response({
-        'title': 'FaceTrack',
-        'version': '2.0',
-        'tagline': 'Real-time facial recognition and attendance tracking',
-        'description': 'A system that uses HOG/DNN-based face detection and 128-dimensional face encodings to identify individuals and record attendance in real time.',
+        'title': 'ReconRoll',
+        'version': '2.0-Mizunoe',
+        'tagline': 'We see you. Literally.',
+        'description': 'The attendance system that works as hard as the people it tracks — except it never calls in sick.',
         'features': [
             {
                 'icon': 'camera-video',
