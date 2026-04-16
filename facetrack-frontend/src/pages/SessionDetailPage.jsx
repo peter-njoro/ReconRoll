@@ -5,8 +5,8 @@ import { recognitionService } from '../api/recognitionService';
 export function SessionDetailPage() {
     const { sessionId } = useParams();
     const [session, setSession] = useState(null);
-    const [presentStudents, setPresentStudents] = useState([]);
-    const [absentStudents, setAbsentStudents] = useState([]);
+    const [presentPeople, setPresentPeople] = useState([]);
+    const [absentPeople, setAbsentPeople] = useState([]);
     const [unidentifiedFaces, setUnidentifiedFaces] = useState([]);
     const [events, setEvents] = useState([]);
     const [progress, setProgress] = useState(null);
@@ -14,7 +14,6 @@ export function SessionDetailPage() {
     const [error, setError] = useState(null);
     const [autoRefresh, setAutoRefresh] = useState(true);
 
-    // Webcam state
     const [isWebcamActive, setIsWebcamActive] = useState(false);
     const [webcamError, setWebcamError] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -23,22 +22,23 @@ export function SessionDetailPage() {
     const canvasRef = useRef(null);
     const streamRef = useRef(null);
     const uploadIntervalRef = useRef(null);
+    const isProcessingRef = useRef(false);
+    const uploadInFlightRef = useRef(false);  // prevent overlapping uploads
+    const abortControllerRef = useRef(null);  // cancel in-flight requests on stop
 
-    // Fetch session data
     const fetchData = async () => {
         try {
             const [sessionRes, presentRes, absentRes, eventsRes, progressRes, unidentifiedRes] = await Promise.all([
                 recognitionService.getSession(sessionId),
-                recognitionService.getPresentStudents(sessionId),
-                recognitionService.getAbsentStudents(sessionId),
+                recognitionService.getPresentPeople(sessionId),
+                recognitionService.getAbsentPeople(sessionId),
                 recognitionService.getSessionEvents(sessionId),
                 recognitionService.getProgress(sessionId),
                 recognitionService.getUnidentifiedFaces(sessionId),
             ]);
-
             setSession(sessionRes.data);
-            setPresentStudents(presentRes.data || []);
-            setAbsentStudents(absentRes.data || []);
+            setPresentPeople(presentRes.data || []);
+            setAbsentPeople(absentRes.data || []);
             setEvents(eventsRes.data || []);
             setProgress(progressRes.data || null);
             setUnidentifiedFaces(unidentifiedRes.data || []);
@@ -51,28 +51,28 @@ export function SessionDetailPage() {
 
     useEffect(() => {
         fetchData();
-
-        // Auto-refresh every 5 seconds if session is running
         let interval;
-        if (autoRefresh) {
-            interval = setInterval(fetchData, 5000);
-        }
-
+        if (autoRefresh) interval = setInterval(fetchData, 5000);
         return () => clearInterval(interval);
     }, [sessionId, autoRefresh]);
 
-    // Start webcam
     const startWebcam = async () => {
         try {
             setWebcamError(null);
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    facingMode: 'user'
-                }
-            });
 
+            // mediaDevices is only available in secure contexts (HTTPS or localhost).
+            // Over plain HTTP on an external IP the browser blocks it entirely.
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setWebcamError(
+                    'Camera access requires a secure connection (HTTPS). ' +
+                    'Please access this page over HTTPS or use localhost.'
+                );
+                return;
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+            });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 streamRef.current = stream;
@@ -80,264 +80,214 @@ export function SessionDetailPage() {
             }
         } catch (err) {
             console.error('Error accessing webcam:', err);
-            setWebcamError('Failed to access webcam. Please ensure camera permissions are granted.');
+            if (err.name === 'NotAllowedError') {
+                setWebcamError('Camera permission denied. Please allow camera access in your browser settings.');
+            } else if (err.name === 'NotFoundError') {
+                setWebcamError('No camera found. Please connect a camera and try again.');
+            } else {
+                setWebcamError('Failed to access webcam: ' + err.message);
+            }
         }
     };
 
-    // Stop webcam
     const stopWebcam = () => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
-        if (videoRef.current) {
-            videoRef.current.srcObject = null;
-        }
-        setIsWebcamActive(false);
+        // Kill the stop flag first so any in-flight interval tick bails out immediately
+        isProcessingRef.current = false;
 
-        // Stop frame uploads
+        // Abort any in-flight upload request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        uploadInFlightRef.current = false;
+
         if (uploadIntervalRef.current) {
             clearInterval(uploadIntervalRef.current);
             uploadIntervalRef.current = null;
         }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        if (videoRef.current) videoRef.current.srcObject = null;
+        setIsWebcamActive(false);
     };
 
-    // Capture and upload frame
     const captureAndUploadFrame = async () => {
-        if (!videoRef.current || !canvasRef.current || !isProcessing) return;
-
+        if (!sessionId || !isProcessingRef.current) return;
+        if (uploadInFlightRef.current) return;  // previous upload still pending, skip this tick
+        if (!videoRef.current || !canvasRef.current) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
         const context = canvas.getContext('2d');
-
-        // Set canvas size to match video
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-
-        // Draw current video frame to canvas
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Convert canvas to base64 JPEG
         const frameData = canvas.toDataURL('image/jpeg', 0.8);
 
+        uploadInFlightRef.current = true;
+        abortControllerRef.current = new AbortController();
         try {
-            // Upload frame to backend
-            await recognitionService.uploadFrame(sessionId, frameData);
+            await recognitionService.uploadFrame(sessionId, frameData, abortControllerRef.current.signal);
         } catch (err) {
-            console.error('Error uploading frame:', err);
+            if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') {
+                console.error('[uploadFrame] Error:', err.message);
+            }
+        } finally {
+            uploadInFlightRef.current = false;
+            abortControllerRef.current = null;
         }
     };
 
-    // Start recognition session
     const startRecognition = async () => {
+        if (!sessionId) { setError('Session ID is missing.'); return; }
         try {
             setError(null);
-
-            // Start the recognition thread on the backend
-            await recognitionService.startSession(sessionId);
-
-            // Start webcam
             await startWebcam();
-
-            // Start processing flag
+            // startWebcam sets webcamError and returns early if mediaDevices unavailable
+            if (!streamRef.current) return;
+            await recognitionService.startSession(sessionId);
             setIsProcessing(true);
+            isProcessingRef.current = true;
 
-            // Start uploading frames every 500ms (2 FPS)
-            uploadIntervalRef.current = setInterval(() => {
-                captureAndUploadFrame();
-            }, 500);
+            let retries = 0;
+            while (retries < 10) {
+                const statusRes = await recognitionService.getSession(sessionId);
+                if (statusRes.data.session.status === 'in_progress') break;
+                await new Promise(r => setTimeout(r, 200));
+                retries++;
+            }
+            if (retries >= 10) throw new Error('Session did not start within expected time');
 
-            // Refresh data immediately
+            uploadIntervalRef.current = setInterval(captureAndUploadFrame, 500);
             await fetchData();
         } catch (err) {
             setError('Failed to start recognition: ' + err.message);
             setIsProcessing(false);
+            isProcessingRef.current = false;
         }
     };
 
-    // Stop recognition session
     const stopRecognition = async () => {
         try {
-            // Stop the recognition thread on the backend
             await recognitionService.stopSession(sessionId);
-
-            // Stop webcam and uploads
             stopWebcam();
             setIsProcessing(false);
-
-            // Refresh data
+            isProcessingRef.current = false;
             await fetchData();
         } catch (err) {
             setError('Failed to stop recognition: ' + err.message);
         }
     };
 
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            stopWebcam();
-        };
-    }, []);
+    useEffect(() => () => stopWebcam(), []);
 
-    if (loading) {
-        return (
-            <div className="session-detail">
-                <div className="session-detail-container">
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-                        <div className="loading-spinner"></div>
-                    </div>
-                </div>
+    if (loading) return (
+        <div className="session-detail">
+            <div className="session-detail-container">
+                <div className="loading-state"><span className="spinner"></span><p>Loading session...</p></div>
             </div>
-        );
-    }
+        </div>
+    );
 
-    if (error) {
-        return (
-            <div className="session-detail">
-                <div className="session-detail-container">
-                    <div className="error-alert">Error: {error}</div>
-                </div>
+    if (error) return (
+        <div className="session-detail">
+            <div className="session-detail-container">
+                <div className="error-alert">{error}</div>
             </div>
-        );
-    }
+        </div>
+    );
 
-    if (!session) {
-        return (
-            <div className="session-detail">
-                <div className="session-detail-container">
-                    <div className="error-alert">Session not found</div>
-                </div>
+    if (!session) return (
+        <div className="session-detail">
+            <div className="session-detail-container">
+                <div className="error-alert">Session not found</div>
             </div>
-        );
-    }
+        </div>
+    );
+
+    const sessionData = session.session ?? session;
 
     return (
         <div className="session-detail">
             <div className="session-detail-container">
+
+                {/* Header */}
                 <div className="session-detail-header">
-                    <h1 className="session-detail-title">{session.subject}</h1>
+                    <h1 className="session-detail-title">{sessionData.name}</h1>
                     <div className="session-detail-info">
                         <div className="detail-info-item">
                             <div className="detail-info-label">Status</div>
                             <div className="detail-info-value">
-                                <span className={`status-badge ${session.status === 'ongoing' ? 'running' : 'stopped'}`}>
-                                    {session.status === 'ongoing' ? '🟢 Running' : '🔴 Stopped'}
+                                <span className={`status-badge ${sessionData.status === 'in_progress' ? 'in_progress' : sessionData.status}`}>
+                                    {sessionData.status === 'in_progress' ? 'Running' : sessionData.status}
                                 </span>
                             </div>
                         </div>
+                        {sessionData.session_type && (
+                            <div className="detail-info-item">
+                                <div className="detail-info-label">Type</div>
+                                <div className="detail-info-value">{sessionData.session_type}</div>
+                            </div>
+                        )}
+                        {sessionData.roster_name && (
+                            <div className="detail-info-item">
+                                <div className="detail-info-label">Roster</div>
+                                <div className="detail-info-value">{sessionData.roster_name}</div>
+                            </div>
+                        )}
                         <div className="detail-info-item">
-                            <div className="detail-info-label">Class Group</div>
-                            <div className="detail-info-value">{session.class_group || 'N/A'}</div>
-                        </div>
-                        <div className="detail-info-item">
-                            <div className="detail-info-label">Created At</div>
-                            <div className="detail-info-value">{new Date(session.created_at).toLocaleDateString()}</div>
+                            <div className="detail-info-label">Created</div>
+                            <div className="detail-info-value">{new Date(sessionData.created_at).toLocaleDateString()}</div>
                         </div>
                     </div>
                 </div>
 
-                {/* Webcam Section */}
+                {/* Webcam */}
                 <div className="webcam-section">
                     <h2><i className="bi bi-camera-video"></i> Live Camera Feed</h2>
 
-                    {webcamError && (
-                        <div className="error-alert" style={{ marginBottom: '1rem' }}>
-                            {webcamError}
-                        </div>
-                    )}
+                    {webcamError && <div className="error-alert">{webcamError}</div>}
 
                     <div className="webcam-container">
                         <video
                             ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            style={{
-                                width: '100%',
-                                maxWidth: '640px',
-                                borderRadius: '8px',
-                                backgroundColor: '#000',
-                                display: isWebcamActive ? 'block' : 'none'
-                            }}
+                            autoPlay playsInline muted
+                            className={`webcam-video${isWebcamActive ? ' active' : ''}`}
                         />
-
                         {!isWebcamActive && (
-                            <div style={{
-                                width: '100%',
-                                maxWidth: '640px',
-                                height: '480px',
-                                backgroundColor: '#1f2937',
-                                borderRadius: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#9ca3af'
-                            }}>
-                                <i className="bi bi-camera-video-off" style={{ fontSize: '48px' }}></i>
+                            <div className="webcam-placeholder">
+                                <i className="bi bi-camera-video-off"></i>
+                                <span>Camera inactive</span>
                             </div>
                         )}
-
-                        {/* Hidden canvas for frame capture */}
                         <canvas ref={canvasRef} style={{ display: 'none' }} />
                     </div>
 
-                    <div className="webcam-controls" style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+                    <div className="webcam-controls">
                         {!isProcessing ? (
                             <button
                                 className="btn-start-recognition"
                                 onClick={startRecognition}
-                                disabled={session.status === 'ended'}
-                                style={{
-                                    padding: '0.75rem 1.5rem',
-                                    backgroundColor: '#10b981',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: session.status === 'ended' ? 'not-allowed' : 'pointer',
-                                    fontSize: '16px',
-                                    fontWeight: '500'
-                                }}
+                                disabled={sessionData.status === 'ended' || sessionData.status === 'completed'}
                             >
                                 <i className="bi bi-play-circle"></i> Start Recognition
                             </button>
                         ) : (
-                            <button
-                                className="btn-stop-recognition"
-                                onClick={stopRecognition}
-                                style={{
-                                    padding: '0.75rem 1.5rem',
-                                    backgroundColor: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer',
-                                    fontSize: '16px',
-                                    fontWeight: '500'
-                                }}
-                            >
+                            <button className="btn-stop-recognition" onClick={stopRecognition}>
                                 <i className="bi bi-stop-circle"></i> Stop Recognition
                             </button>
                         )}
-
                         {isProcessing && (
-                            <span style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: '#10b981',
-                                fontWeight: '500'
-                            }}>
-                                <div className="loading-spinner" style={{
-                                    width: '20px',
-                                    height: '20px',
-                                    marginRight: '0.5rem',
-                                    borderWidth: '2px'
-                                }}></div>
-                                Processing...
+                            <span className="processing-indicator">
+                                <span className="spinner"></span> Processing...
                             </span>
                         )}
                     </div>
                 </div>
 
+                {/* Progress */}
                 {progress && (
                     <div className="progress-section">
                         <h2><i className="bi bi-graph-up"></i> Recognition Progress</h2>
@@ -360,100 +310,82 @@ export function SessionDetailPage() {
                             </div>
                         </div>
                         <div className="progress-bar-large">
-                            <div
-                                className="progress-fill"
-                                style={{ width: `${progress.attendance_percentage}%` }}
-                            />
+                            <div className="progress-fill" style={{ width: `${progress.attendance_percentage}%` }} />
                         </div>
                     </div>
                 )}
 
-                {/* Unidentified Faces Section */}
+                {/* Unidentified faces */}
                 {unidentifiedFaces.length > 0 && (
                     <div className="unidentified-section">
                         <h2><i className="bi bi-question-circle"></i> Unidentified Faces ({unidentifiedFaces.length})</h2>
-                        <div className="unidentified-grid" style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                            gap: '1rem',
-                            marginTop: '1rem'
-                        }}>
-                            {unidentifiedFaces.map(face => (
-                                <div key={face.id} className="unidentified-item" style={{
-                                    border: '2px solid #f59e0b',
-                                    borderRadius: '8px',
-                                    padding: '0.5rem',
-                                    textAlign: 'center'
-                                }}>
+                        <div className="unidentified-grid">
+                            {unidentifiedFaces.map((face, i) => (
+                                <div key={face.id ?? i} className="unidentified-item">
                                     {face.cropped_face && (
-                                        <img
-                                            src={face.cropped_face}
-                                            alt="Unidentified face"
-                                            style={{
-                                                width: '100%',
-                                                borderRadius: '4px',
-                                                marginBottom: '0.5rem'
-                                            }}
-                                        />
+                                        <img src={face.cropped_face} alt="Unidentified face" />
                                     )}
-                                    <small style={{ color: '#6b7280' }}>
-                                        {face.timestamp ? new Date(face.timestamp).toLocaleTimeString() : 'Unknown time'}
-                                    </small>
+                                    <small>{face.timestamp ? new Date(face.timestamp).toLocaleTimeString() : '—'}</small>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                <div className="students-section">
-                    <div className="students-list">
-                        <h3><i className="bi bi-check-circle"></i> Present Students ({presentStudents.length})</h3>
-                        {presentStudents.length > 0 ? (
+                {/* Present / Absent */}
+                <div className="people-section">
+                    <div className="people-list">
+                        <h3><i className="bi bi-check-circle"></i> Present ({presentPeople.length})</h3>
+                        {presentPeople.length > 0 ? (
                             <ul>
-                                {presentStudents.map(student => (
-                                    <li key={student.id}>
-                                        <i className="bi bi-person-check"></i> {student.full_name} ({student.registration_number})
+                                {presentPeople.map(person => (
+                                    <li key={person.id}>
+                                        <i className="bi bi-person-check"></i>
+                                        {person.name || person.full_name}
+                                        <span className="person-id-tag">{person.identification_number || 'N/A'}</span>
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No present students yet</p>
+                            <p className="empty-list-msg">No people present yet</p>
                         )}
                     </div>
 
-                    <div className="students-list">
-                        <h3><i className="bi bi-x-circle"></i> Absent Students ({absentStudents.length})</h3>
-                        {absentStudents.length > 0 ? (
+                    <div className="people-list">
+                        <h3><i className="bi bi-x-circle"></i> Absent ({absentPeople.length})</h3>
+                        {absentPeople.length > 0 ? (
                             <ul>
-                                {absentStudents.map(student => (
-                                    <li key={student.id}>
-                                        <i className="bi bi-person-x"></i> {student.full_name} ({student.registration_number})
+                                {absentPeople.map(person => (
+                                    <li key={person.id}>
+                                        <i className="bi bi-person-x"></i>
+                                        {person.name || person.full_name}
+                                        <span className="person-id-tag">{person.identification_number || 'N/A'}</span>
                                     </li>
                                 ))}
                             </ul>
                         ) : (
-                            <p style={{ color: '#6b7280', textAlign: 'center', paddingTop: '1rem' }}>No absent students</p>
+                            <p className="empty-list-msg">No absent people</p>
                         )}
                     </div>
                 </div>
 
+                {/* Events */}
                 {events.length > 0 && (
                     <div className="events-section">
                         <h2><i className="bi bi-clock-history"></i> Recent Events ({events.length})</h2>
                         <div className="events-list">
-                            {events.map(event => (
-                                <div key={event.id} className={`event ${event.severity || 'info'}`}>
+                            {events.map((event, i) => (
+                                <div key={event.id ?? i} className={`event ${event.severity || 'info'}`}>
                                     <span className="type">[{event.event_type}]</span>
                                     <span className="message">{event.message}</span>
-                                    <span className="time">
-                                        {new Date(event.timestamp).toLocaleTimeString()}
-                                    </span>
+                                    <span className="time">{new Date(event.timestamp).toLocaleTimeString()}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
+                {/* Controls */}
                 <div className="session-controls">
                     <label className="controls-checkbox">
                         <input
@@ -464,6 +396,7 @@ export function SessionDetailPage() {
                         <span>Auto-refresh every 5 seconds</span>
                     </label>
                 </div>
+
             </div>
         </div>
     );

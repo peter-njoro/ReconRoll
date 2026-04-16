@@ -1,0 +1,317 @@
+openapi: 3.0.3
+info:
+  title: ReconRoll API
+  description: REST API for the ReconRoll facial recognition attendance system.
+  version: 2.0.0
+
+servers:
+  - url: https://192.168.100.90/api
+    description: Local deployment
+
+security:
+  - tokenAuth: []
+
+components:
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "DRF token auth. Format: `Token <token>`"
+
+paths:
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+
+  /users/signup/:
+    post:
+      summary: Register a new user
+      security: []
+      tags: [Auth]
+      responses:
+        "201": { description: User created }
+        "400": { description: Validation error }
+
+  /users/login/:
+    post:
+      summary: Log in and receive a token
+      security: []
+      tags: [Auth]
+      responses:
+        "200": { description: Login successful, returns token }
+        "400": { description: Invalid credentials }
+
+  /users/logout/:
+    post:
+      summary: Invalidate the current token
+      tags: [Auth]
+      responses:
+        "200": { description: Logged out }
+        "401": { description: Unauthorized }
+
+  /users/me/:
+    get:
+      summary: Get the current user's profile
+      tags: [Auth]
+      responses:
+        "200": { description: User profile }
+        "401": { description: Unauthorized }
+
+  # ── Enrollment ────────────────────────────────────────────────────────────
+
+  /enroll/:
+    post:
+      summary: Enroll a new person with one or more face images
+      security: []
+      tags: [Enrollment]
+      responses:
+        "201": { description: Person enrolled successfully }
+        "400": { description: Validation or face detection error }
+
+  /enroll/progress/:
+    get:
+      summary: Poll enrollment processing progress
+      security: []
+      tags: [Enrollment]
+      responses:
+        "200": { description: Progress percentage }
+
+  # ── People ────────────────────────────────────────────────────────────────
+
+  /people/:
+    get:
+      summary: List all people who have face encodings
+      tags: [People]
+      responses:
+        "200": { description: List of people }
+        "401": { description: Unauthorized }
+
+  /people/{id}/:
+    get:
+      summary: Get details for a specific person
+      tags: [People]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Person detail }
+        "404": { description: Not found }
+
+  # ── Rosters ───────────────────────────────────────────────────────────────
+
+  /rosters/:
+    get:
+      summary: List all rosters
+      tags: [Rosters]
+      responses:
+        "200": { description: List of rosters }
+        "401": { description: Unauthorized }
+
+  /roster/create/:
+    post:
+      summary: Create a new roster
+      tags: [Rosters]
+      responses:
+        "201": { description: Roster created }
+        "400": { description: Validation error }
+
+  /roster/{id}/:
+    get:
+      summary: Get a roster and its people
+      tags: [Rosters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Roster detail }
+        "404": { description: Not found }
+
+  /roster/{id}/update/:
+    post:
+      summary: Update a roster's name, description, or people
+      tags: [Rosters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Roster updated }
+        "400": { description: Validation error }
+        "404": { description: Not found }
+
+  /roster/{id}/delete/:
+    delete:
+      summary: Delete a roster
+      tags: [Rosters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Roster deleted }
+        "404": { description: Not found }
+
+  # ── Sessions ──────────────────────────────────────────────────────────────
+
+  /sessions/:
+    get:
+      summary: List all sessions
+      tags: [Sessions]
+      responses:
+        "200": { description: List of sessions }
+        "401": { description: Unauthorized }
+
+  /session/create/:
+    post:
+      summary: Create a new session
+      tags: [Sessions]
+      responses:
+        "201": { description: Session created }
+        "400": { description: Validation error }
+
+  /session/{id}/:
+    get:
+      summary: Get session details and attendance summary
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Session detail }
+        "404": { description: Not found }
+
+  /session/{id}/start/:
+    post:
+      summary: Start the recognition thread for a session
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Recognition started }
+        "400": { description: Session already running or invalid state }
+
+  /session/{id}/stop/:
+    post:
+      summary: Stop the recognition thread and complete the session
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Session stopped }
+        "404": { description: Not found }
+
+  /sessions/stop-all/:
+    post:
+      summary: Stop all currently running sessions
+      tags: [Sessions]
+      responses:
+        "200": { description: All sessions stopped }
+        "401": { description: Unauthorized }
+
+  /sessions/{id}/upload_frame/:
+    post:
+      summary: Upload a webcam frame for processing
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Frame queued }
+        "400": { description: Session not running or thread not active }
+        "429": { description: Frame queue full }
+
+  # ── Session Data ──────────────────────────────────────────────────────────
+
+  /session/{id}/present_partial/:
+    get:
+      summary: Get present people for a session
+      tags: [Session Data]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Present people list }
+
+  /session/{id}/absent_partial/:
+    get:
+      summary: Get absent people for a session
+      tags: [Session Data]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Absent people list }
+
+  /session/{id}/events_partial/:
+    get:
+      summary: Get the event log for a session
+      tags: [Session Data]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Event list }
+
+  /session/{id}/unidentified_partial/:
+    get:
+      summary: Get unidentified face captures for a session
+      tags: [Session Data]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Unidentified faces list }
+
+  /session/{id}/progress_partial/:
+    get:
+      summary: Get attendance progress stats for a session
+      tags: [Session Data]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Progress stats }
+
+  # ── Misc ──────────────────────────────────────────────────────────────────
+
+  /info/:
+    get:
+      summary: System info and feature overview
+      security: []
+      tags: [Misc]
+      responses:
+        "200": { description: System info }
+
+  /csrf/:
+    get:
+      summary: Get a CSRF token
+      security: []
+      tags: [Misc]
+      responses:
+        "200": { description: CSRF token }

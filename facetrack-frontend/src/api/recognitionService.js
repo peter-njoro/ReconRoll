@@ -1,6 +1,11 @@
 import apiClient from './client';
 
 export const recognitionService = {
+    // -----------------------------------------------------------------------
+    // Info
+    // -----------------------------------------------------------------------
+    getInfo: () => apiClient.get('/info/'),
+
     enrollStudent: (formData) =>
         apiClient.post('/enroll/', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
@@ -44,8 +49,43 @@ export const recognitionService = {
     // Frame upload (DRF router)
     // -----------------------------------------------------------------------
 
-    uploadFrame: (sessionId, frameData) =>
-        apiClient.post(`/session/${sessionId}/upload_frame/`, { frame: frameData }),
+    uploadFrame: (sessionId, frameData, signal) => {
+        if (!sessionId) {
+            console.error('[uploadFrame] sessionId is missing/undefined');
+            return Promise.reject(new Error('Session ID is required for frame upload'));
+        }
+        if (!frameData) {
+            console.error('[uploadFrame] frameData is missing/undefined');
+            return Promise.reject(new Error('Frame data is required'));
+        }
+        
+        // Convert base64 data URL to binary blob
+        const base64String = frameData.split(',')[1]; // Remove "data:image/jpeg;base64," prefix
+        const binaryString = atob(base64String);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'image/jpeg' });
+        
+        // Create FormData for multipart upload
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');
+        
+        // Use DRF router URL pattern: /api/sessions/<pk>/upload_frame/
+        const url = `/sessions/${sessionId}/upload_frame/`;
+        console.debug(`[uploadFrame] sessionId="${sessionId}"`);
+        console.debug(`[uploadFrame] Calling POST ${url} with multipart/form-data`);
+        
+        // IMPORTANT: Let axios set Content-Type automatically for FormData (with boundary)
+        // We must override the default 'application/json' header
+        return apiClient.post(url, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            },
+            signal,
+        });
+    },
 
     // -----------------------------------------------------------------------
     // Session detail data – traditional Django partial views.
@@ -55,15 +95,15 @@ export const recognitionService = {
     // in response.data, matching what SessionDetailPage expects.
     // -----------------------------------------------------------------------
 
-    getPresentStudents: (sessionId) =>
+    getPresentPeople: (sessionId) =>
         apiClient
             .get(`/session/${sessionId}/present_partial/`)
-            .then((res) => ({ ...res, data: res.data.present_students })),
+            .then((res) => ({ ...res, data: res.data.present_people })),
 
-    getAbsentStudents: (sessionId) =>
+    getAbsentPeople: (sessionId) =>
         apiClient
             .get(`/session/${sessionId}/absent_partial/`)
-            .then((res) => ({ ...res, data: res.data.absent_students })),
+            .then((res) => ({ ...res, data: res.data.absent_people })),
 
     getSessionEvents: (sessionId) =>
         apiClient
@@ -81,20 +121,23 @@ export const recognitionService = {
             .then((res) => ({ ...res, data: res.data.unidentified_faces })),
 
     // -----------------------------------------------------------------------
-    // Students  (DRF router)
+    // People & Rosters
     // -----------------------------------------------------------------------
-    // getStudents:    ()           => api.get('/students/'),
-    // getStudent:     (id)         => api.get(`/students/${id}/`),
-    // createStudent:  (data)       => api.post('/students/', data),
-    // updateStudent:  (id, data)   => api.put(`/students/${id}/`, data),
-    // deleteStudent:  (id)         => api.delete(`/students/${id}/`),
-
-    // -----------------------------------------------------------------------
-    // Class Groups  (DRF router)
-    // -----------------------------------------------------------------------
-    // getClassGroups:    ()        => api.get('/class-groups/'),
-    // getClassGroup:     (id)      => api.get(`/class-groups/${id}/`),
-    // createClassGroup:  (data)    => api.post('/class-groups/', data),
-    // updateClassGroup:  (id, data)=> api.put(`/class-groups/${id}/`, data),
-    // deleteClassGroup:  (id)      => api.delete(`/class-groups/${id}/`),
+    getPeopleWithEncodings: () => apiClient.get('/people/'),
+    getPersonDetail: (personId) => apiClient.get(`/people/${personId}/`),
+    
+    // Roster management
+    listRosters: () => apiClient.get('/rosters/'),
+    getRosterDetail: (rosterId) => apiClient.get(`/roster/${rosterId}/`),
+    createRoster: (data) => apiClient.post('/roster/create/', data),
+    updateRoster: (rosterId, data) => apiClient.post(`/roster/${rosterId}/update/`, data),
+    deleteRoster: (rosterId) => apiClient.delete(`/roster/${rosterId}/delete/`),
+    
+    // Legacy - sets expected people for a session directly
+    createRosterForSession: (sessionId, personIds, replace = true) =>
+        apiClient.post('/roster/create/', {
+            session_id: sessionId,
+            person_ids: personIds,
+            replace: replace,
+        }),
 };

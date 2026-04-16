@@ -3,17 +3,20 @@ import { recognitionService } from '../api/recognitionService';
 
 export function EnrollmentForm() {
     const [formData, setFormData] = useState({
-        name: '',
-        student_id: '',
+        first_name: '',
+        last_name: '',
+        identification_number: '',
         email: '',
-        course: '',
-        year_of_study: '1',
+        phone: '',
+        date_of_birth: '',
+        status: 'active',
+        notes: '',
     });
     const [images, setImages] = useState([]);
     const [progress, setProgress] = useState(0);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
-    const [student, setStudent] = useState(null);
+    const [person, setPerson] = useState(null);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -36,18 +39,14 @@ export function EnrollmentForm() {
         setLoading(true);
 
         const data = new FormData();
-        data.append('name', formData.name);
-        data.append('student_id', formData.student_id);
-        
-        if (formData.email) {
-            data.append('email', formData.email);
-        }
-        if (formData.course) {
-            data.append('course', formData.course);
-        }
-        if (formData.year_of_study) {
-            data.append('year_of_study', formData.year_of_study);
-        }
+        data.append('first_name', formData.first_name);
+        data.append('last_name', formData.last_name);
+        data.append('identification_number', formData.identification_number);
+        if (formData.email) data.append('email', formData.email);
+        if (formData.phone) data.append('phone', formData.phone);
+        if (formData.date_of_birth) data.append('date_of_birth', formData.date_of_birth);
+        if (formData.status) data.append('status', formData.status);
+        if (formData.notes) data.append('notes', formData.notes);
         
         images.forEach(image => {
             data.append('face_images', image);
@@ -67,8 +66,17 @@ export function EnrollmentForm() {
                 type: 'success',
                 text: response.data.message
             });
-            setStudent(response.data.student);
-            setFormData({ name: '', student_id: '', email: '', course: '', year_of_study: '1' });
+            setPerson(response.data.person);
+            setFormData({
+                first_name: '',
+                last_name: '',
+                identification_number: '',
+                email: '',
+                phone: '',
+                date_of_birth: '',
+                status: 'active',
+                notes: '',
+            });
             setImages([]);
         } catch (error) {
             console.error('Error response:', error.response?.data);
@@ -113,213 +121,199 @@ export function EnrollmentForm() {
     };
 
     return (
-        <div className="enrollment-page">
-            <div className="container-lg">
-                <div className="enrollment-container">
-                    <div className="enrollment-card">
-                        <div className="form-header">
-                            <div className="form-icon">
-                                <i className="bi bi-person-plus-fill"></i>
-                            </div>
-                            <h1 className="form-title">Enroll Student</h1>
-                            <p className="form-subtitle">Register a student for facial recognition</p>
+        <div className="auth-page">
+            <div className="auth-card auth-card-wide">
+                <div className="auth-header">
+                    <p className="auth-eyebrow">Enrollment</p>
+                    <h1 className="auth-title">Enroll a person</h1>
+                    <p className="auth-subtitle">Provide details and upload clear face images.</p>
+                </div>
+
+                {message && (
+                    <div
+                        className={`alert ${message.type === 'success' ? 'success' : 'error'}`}
+                        style={{ whiteSpace: 'pre-wrap' }}
+                    >
+                        {message.text}
+                    </div>
+                )}
+
+                {person && (
+                    <div className="success-info-card">
+                        <h3 className="success-title">Enrollment successful</h3>
+                        <div className="person-details">
+                            <p><strong>Name:</strong> {person.name}</p>
+                            <p><strong>Encodings:</strong> {person.encodings_count}</p>
                         </div>
+                    </div>
+                )}
 
-                        {message && (
-                            <div 
-                                className={`alert-custom alert-${message.type}`}
-                                style={message.type === 'error' ? {
-                                    borderLeft: `4px solid var(--error-color)`,
-                                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
-                                    color: 'var(--error-color)'
-                                } : {}}
+                <form onSubmit={handleSubmit} className="auth-form">
+                    <div className="field-row">
+                        <label className="field">
+                            <span>First name *</span>
+                            <input
+                                type="text"
+                                id="first_name"
+                                name="first_name"
+                                placeholder="First name"
+                                value={formData.first_name}
+                                onChange={handleInputChange}
+                                required
+                            />
+                        </label>
+                        <label className="field">
+                            <span>Last name *</span>
+                            <input
+                                type="text"
+                                id="last_name"
+                                name="last_name"
+                                placeholder="Last name"
+                                value={formData.last_name}
+                                onChange={handleInputChange}
+                                required
+                            />
+                        </label>
+                    </div>
+
+                    <label className="field">
+                        <span>Identification number *</span>
+                        <input
+                            type="text"
+                            id="identification_number"
+                            name="identification_number"
+                            placeholder="ID or employee number"
+                            value={formData.identification_number}
+                            onChange={handleInputChange}
+                            required
+                        />
+                    </label>
+
+                    <div className="field-row">
+                        <label className="field">
+                            <span>Email</span>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                placeholder="name@company.com"
+                                value={formData.email}
+                                onChange={handleInputChange}
+                            />
+                        </label>
+                        <label className="field">
+                            <span>Phone</span>
+                            <input
+                                type="tel"
+                                id="phone"
+                                name="phone"
+                                placeholder="Optional"
+                                value={formData.phone}
+                                onChange={handleInputChange}
+                            />
+                        </label>
+                    </div>
+
+                    <div className="field-row">
+                        <label className="field">
+                            <span>Date of birth</span>
+                            <input
+                                type="date"
+                                id="date_of_birth"
+                                name="date_of_birth"
+                                value={formData.date_of_birth}
+                                onChange={handleInputChange}
+                            />
+                        </label>
+                        <label className="field">
+                            <span>Status</span>
+                            <select
+                                id="status"
+                                name="status"
+                                value={formData.status}
+                                onChange={handleInputChange}
                             >
-                                <i className={`bi bi-${message.type === 'success' ? 'check-circle' : 'exclamation-circle'}`}></i>
-                                <div style={{ whiteSpace: 'pre-wrap' }}>
-                                    {message.text}
-                                </div>
-                            </div>
-                        )}
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </label>
+                    </div>
 
-                        {student && (
-                            <div className="success-info-card">
-                                <div className="success-icon">
-                                    <i className="bi bi-check-circle"></i>
-                                </div>
-                                <h3 className="success-title">Enrollment Successful!</h3>
-                                <div className="student-details">
-                                    <p><strong>Student Name:</strong> {student.name}</p>
-                                    <p><strong>Facial Encodings:</strong> {student.encodings_count}</p>
-                                </div>
-                            </div>
-                        )}
+                    <label className="field">
+                        <span>Notes</span>
+                        <textarea
+                            id="notes"
+                            name="notes"
+                            rows="3"
+                            placeholder="Optional notes"
+                            value={formData.notes}
+                            onChange={handleInputChange}
+                        />
+                    </label>
 
-                        <form onSubmit={handleSubmit} className="enrollment-form">
-                            <div className="form-group">
-                                <label htmlFor="name">Student Name *</label>
-                                <div className="input-wrapper">
-                                    <i className="bi bi-person"></i>
-                                    <input
-                                        type="text"
-                                        id="name"
-                                        name="name"
-                                        placeholder="Enter student's full name"
-                                        value={formData.name}
-                                        onChange={handleInputChange}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="student_id">Student ID / Registration Number *</label>
-                                <div className="input-wrapper">
-                                    <i className="bi bi-card-text"></i>
-                                    <input
-                                        type="text"
-                                        id="student_id"
-                                        name="student_id"
-                                        placeholder="Enter registration number"
-                                        value={formData.student_id}
-                                        onChange={handleInputChange}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="email">Email Address (Optional)</label>
-                                <div className="input-wrapper">
-                                    <i className="bi bi-envelope"></i>
-                                    <input
-                                        type="email"
-                                        id="email"
-                                        name="email"
-                                        placeholder="Enter email address"
-                                        value={formData.email}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="course">Course (Optional)</label>
-                                <div className="input-wrapper">
-                                    <i className="bi bi-book"></i>
-                                    <input
-                                        type="text"
-                                        id="course"
-                                        name="course"
-                                        placeholder="Enter course name"
-                                        value={formData.course}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="year_of_study">Year of Study (Optional)</label>
-                                <div className="input-wrapper">
-                                    <i className="bi bi-calendar"></i>
-                                    <select
-                                        id="year_of_study"
-                                        name="year_of_study"
-                                        value={formData.year_of_study}
-                                        onChange={handleInputChange}
-                                    >
-                                        <option value="1">Year 1</option>
-                                        <option value="2">Year 2</option>
-                                        <option value="3">Year 3</option>
-                                        <option value="4">Year 4</option>
-                                        <option value="5">Year 5</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="form-group image-upload">
-                                <label htmlFor="images">Face Images *</label>
-                                <div className="upload-wrapper">
-                                    <input
-                                        type="file"
-                                        id="images"
-                                        multiple
-                                        accept="image/*"
-                                        onChange={handleImageChange}
-                                        disabled={loading}
-                                    />
-                                    <div className="upload-hint">
-                                        <i className="bi bi-cloud-upload"></i>
-                                        <p>Drag and drop your images here or click to browse</p>
-                                        <span>Add multiple images one by one (minimum 3-5 clear face images recommended)</span>
-                                    </div>
-                                </div>
-
-                                {images.length > 0 && (
-                                    <div className="selected-images">
-                                        <p className="selected-count">
-                                            <i className="bi bi-check-circle-fill"></i>
-                                            {images.length} image{images.length !== 1 ? 's' : ''} selected
-                                        </p>
-                                        <div className="image-list">
-                                            {images.map((image, index) => (
-                                                <div key={index} className="image-item">
-                                                    <div className="image-info">
-                                                        <i className="bi bi-image"></i>
-                                                        <div className="image-details">
-                                                            <span className="image-name">{image.name}</span>
-                                                            <span className="image-size">
-                                                                {(image.size / 1024).toFixed(2)} KB
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="remove-image-btn"
-                                                        onClick={() => removeImage(index)}
-                                                        disabled={loading}
-                                                        title="Remove this image"
-                                                    >
-                                                        <i className="bi bi-trash"></i>
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <button
-                                type="submit"
-                                className="btn-submit"
+                    <div className="field">
+                        <span>Face images *</span>
+                        <label className="file-upload-label">
+                            <i className="bi bi-upload"></i>
+                            {images.length > 0 ? `${images.length} image${images.length !== 1 ? 's' : ''} selected` : 'Click to upload images'}
+                            <input
+                                type="file"
+                                id="images"
+                                multiple
+                                accept="image/*"
+                                onChange={handleImageChange}
                                 disabled={loading}
-                            >
-                                {loading ? (
-                                    <>
-                                        <span className="spinner"></span>
-                                        Enrolling Student...
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="bi bi-upload"></i>
-                                        Enroll Student
-                                    </>
-                                )}
-                            </button>
-                        </form>
+                                style={{ display: 'none' }}
+                            />
+                        </label>
 
-                        {progress > 0 && progress < 100 && (
-                            <div className="progress-section">
-                                <div className="progress-bar">
-                                    <div
-                                        className="progress-fill"
-                                        style={{ width: `${progress}%` }}
-                                    ></div>
+                        {images.length > 0 && (
+                            <div className="selected-images">
+                                <div className="image-list">
+                                    {images.map((image, index) => (
+                                        <div key={index} className="image-item">
+                                            <div className="image-info">
+                                                <span className="image-name">{image.name}</span>
+                                                <span className="image-size">
+                                                    {(image.size / 1024).toFixed(1)} KB
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="remove-image-btn"
+                                                onClick={() => removeImage(index)}
+                                                disabled={loading}
+                                            >
+                                                <i className="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
-                                <p className="progress-text">{progress}% Complete</p>
                             </div>
                         )}
                     </div>
-                </div>
+
+                    <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={loading}
+                    >
+                        {loading ? 'Enrolling...' : 'Enroll person'}
+                    </button>
+                </form>
+
+                {progress > 0 && progress < 100 && (
+                    <div className="progress-section">
+                        <div className="progress-bar">
+                            <div
+                                className="progress-fill"
+                                style={{ width: `${progress}%` }}
+                            ></div>
+                        </div>
+                        <p className="progress-text">{progress}% Complete</p>
+                    </div>
+                )}
             </div>
         </div>
     );

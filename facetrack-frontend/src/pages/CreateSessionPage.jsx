@@ -1,61 +1,96 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recognitionService } from '../api/recognitionService';
 
 export function CreateSessionPage() {
     const navigate = useNavigate();
+    const [rosters, setRosters] = useState([]);
     const [formData, setFormData] = useState({
-        subject: '',
-        class_group: '',  // ← CHANGED from class_group_name
+        name: '',
+        description: '',
+        roster: '',
+        session_type: '',
     });
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
-    console.log('CreateSessionPage rendered with formData:', formData);
-    console.log('Current loading state:', loading);
-    console.log('Current error state:', error);
+    // Load rosters on mount
+    useEffect(() => {
+        const fetchRosters = async () => {
+            try {
+                const response = await recognitionService.listRosters();
+                setRosters(response.data.rosters || []);
+            } catch (err) {
+                console.error('Error fetching rosters:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRosters();
+    }, []);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        console.log(`Form field changed: ${name} = ${value}`);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
+        setSubmitting(true);
         setError(null);
-        
-        console.log('Form submitted with data:', {
-            subject: formData.subject,
-            class_group: formData.class_group || null,  // ← CHANGED
-        });
 
         try {
-            const response = await recognitionService.createSession({
-                subject: formData.subject,
-                class_group: formData.class_group || null,  // ← CHANGED
-            });
-
-            console.log('Session created successfully:', response.data);
-            // response.data contains the session object; navigate using its id
-            alert('Session created');
-            navigate(`/session/${response.data.session.id}`);  // Note: response wraps session in .session
-        } catch (err) {
-            console.error('Error creating session:', err);
-            console.error('Error response data:', err.response?.data);
-            console.error('Error message:', err.message);
+            // Backend expects start_time (datetime) and status
+            // Default to current time and 'scheduled' status
+            const now = new Date().toISOString();
             
+            const sessionPayload = {
+                name: formData.name,
+                description: formData.description || '',
+                start_time: now,  // Required by backend
+                status: 'scheduled',  // Default status
+            };
+
+            // Add roster if selected
+            if (formData.roster) {
+                sessionPayload.roster = formData.roster;
+            }
+
+            // Add session_type if provided
+            if (formData.session_type) {
+                sessionPayload.session_type = formData.session_type;
+            }
+
+            const response = await recognitionService.createSession(sessionPayload);
+
+            console.log('[CreateSessionPage] API Response:', response);
+            const sessionId = response.data.session?.id || response.data.id;
+            console.log('[CreateSessionPage] Extracted sessionId:', sessionId);
+            
+            if (!sessionId) {
+                setError('Failed to extract session ID from response');
+                return;
+            }
+            
+            // If no roster was selected, redirect to roster selection to add expected people
+            // Otherwise, go directly to session detail
+            if (formData.roster) {
+                navigate(`/session/${sessionId}`);
+            } else {
+                navigate(`/session/${sessionId}/roster`);
+            }
+        } catch (err) {
+            console.error('[CreateSessionPage] Error:', err);
             const errorMessage = 
                 err.response?.data?.message ||
                 err.response?.data?.errors?.join(', ') ||
-                err.message;
-            
-            console.log('Setting error state to:', errorMessage);
+                err.message ||
+                'Failed to create session';
             setError(errorMessage);
         } finally {
-            setLoading(false);
-            console.log('Request completed, loading state set to false');
+            setSubmitting(false);
         }
     };
 
@@ -81,61 +116,93 @@ export function CreateSessionPage() {
 
                         <form onSubmit={handleSubmit} className="form-content">
                             <div className="form-group">
-                                <label htmlFor="subject">Session Subject *</label>
+                                <label htmlFor="name">Session Name *</label>
                                 <div className="input-wrapper">
                                     <i className="bi bi-pencil"></i>
                                     <input
                                         type="text"
-                                        id="subject"
-                                        name="subject"
-                                        placeholder="e.g., CS101 - Lecture 5"
-                                        value={formData.subject}
+                                        id="name"
+                                        name="name"
+                                        placeholder="e.g., Team Meeting - Feb 18"
+                                        value={formData.name}
                                         onChange={handleChange}
                                         required
+                                        disabled={submitting}
                                     />
                                 </div>
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="class_group">Class Group (Optional)</label>
+                                <label htmlFor="description">Description (Optional)</label>
                                 <div className="input-wrapper">
-                                    <i className="bi bi-folder"></i>
-                                    {/* 
-                                        TODO: This needs to be a <select> dropdown that fetches
-                                        ClassGroup objects from the API and sends the ID, not a name.
-                                        
-                                        The class_group field is a ForeignKey that expects a UUID/ID.
-                                        For now, you can either:
-                                        1. Leave this empty (class_group is optional)
-                                        2. Change to a <select> that calls recognitionService.getClassGroups()
-                                           and populates options with { value: group.id, label: group.name }
-                                        
-                                        Example select implementation:
-                                        
-                                        <select name="class_group" value={formData.class_group} onChange={handleChange}>
-                                            <option value="">-- None --</option>
-                                            {classGroups.map(group => (
-                                                <option key={group.id} value={group.id}>{group.name}</option>
-                                            ))}
-                                        </select>
-                                    */}
-                                    <input
-                                        type="text"
-                                        id="class_group"
-                                        name="class_group"  // ← CHANGED from class_group_name
-                                        placeholder="Enter class group ID (or leave empty)"
-                                        value={formData.class_group}
+                                    <i className="bi bi-file-text"></i>
+                                    <textarea
+                                        id="description"
+                                        name="description"
+                                        placeholder="Add any notes about this session..."
+                                        value={formData.description}
                                         onChange={handleChange}
+                                        rows="3"
+                                        disabled={submitting}
+                                        style={{
+                                            paddingLeft: '2.5rem',
+                                            paddingRight: '0.75rem',
+                                            paddingTop: '0.75rem',
+                                            paddingBottom: '0.75rem',
+                                        }}
                                     />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="roster">
+                                    Select Roster (Optional)
+                                    <span className="hint"> - People will be auto-populated from the roster</span>
+                                </label>
+                                <div className="input-wrapper">
+                                    <i className="bi bi-people"></i>
+                                    <select
+                                        id="roster"
+                                        name="roster"
+                                        value={formData.roster}
+                                        onChange={handleChange}
+                                        disabled={submitting || loading}
+                                    >
+                                        <option value="">-- No Roster --</option>
+                                        {rosters.map(roster => (
+                                            <option key={roster.id} value={roster.id}>
+                                                {roster.name} ({roster.people_count} people)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="session_type">Session Type (Optional)</label>
+                                <div className="input-wrapper">
+                                    <i className="bi bi-layers"></i>
+                                    <select
+                                        id="session_type"
+                                        name="session_type"
+                                        value={formData.session_type}
+                                        onChange={handleChange}
+                                        disabled={submitting}
+                                    >
+                                        <option value="">-- Select Type --</option>
+                                        <option value="recognition">Face Recognition</option>
+                                        <option value="enrollment">Face Enrollment</option>
+                                        <option value="verification">Face Verification</option>
+                                    </select>
                                 </div>
                             </div>
 
                             <button
                                 type="submit"
                                 className="btn-submit"
-                                disabled={loading}
+                                disabled={submitting || loading}
                             >
-                                {loading ? (
+                                {submitting ? (
                                     <>
                                         <span className="spinner"></span>
                                         Creating Session...
@@ -143,14 +210,14 @@ export function CreateSessionPage() {
                                 ) : (
                                     <>
                                         <i className="bi bi-play-circle"></i>
-                                        Create and Start Session
+                                        Create Session
                                     </>
                                 )}
                             </button>
                         </form>
 
                         <div className="form-footer">
-                            <p>Need help? <a href="/sessions">View active sessions</a></p>
+                            <p>Need help? <a href="/sessions">View active sessions</a> or <a href="/rosters">manage rosters</a></p>
                         </div>
                     </div>
                 </div>

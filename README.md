@@ -21,207 +21,135 @@
 
 ---
 
-#  **Table of Contents**
+## Overview
 
-* [Overview](#overview)
-* [Tech Stack](#tech-stack)
-* [System Architecture](#system-architecture)
-* [Workflow](#workflow)
-* [Key Modules](#key-modules)
-* [Installation & Setup](#installation--setup)
+**ReconRoll** is a real-time facial recognition attendance system. A user starts a session, points a webcam at a room, and the system automatically identifies people, marks them present or absent, captures unidentified faces for review, and produces a full attendance summary when the session ends.
 
-  * [Docker Setup (Recommended)](#docker-setup-recommended)
-  * [Manual Setup](#manual-setup)
-* [How It Works (Simple)](#how-it-works-simple)
-* [Contributing](#contributing)
-* [Disclaimer](#disclaimer)
-* [Author](#author)
-* [Developer Notes](#developer-notes)
+The system is roster-based — each session is scoped to a specific list of expected people, so recognition only runs against the faces that are actually supposed to be there. This keeps matching fast and reduces false positives.
+
+It was originally built as *FaceTrack Lite* and has since been rewritten with a proper REST API, a React frontend, and a containerized deployment stack.
 
 ---
 
-#  **Overview**
+## Tech Stack
 
-**ReconRoll** is a modular, real-time facial recognition attendance system designed for automation in schools, workplaces, events, and controlled environments.
-It provides robust attendance tracking using fast face detection, deep-learning encodings, and session-based logging.
-
-ReconRoll evolved from the earlier *FaceTrack Lite* project and demonstrates a practical application of computer vision and AI engineering.
-
-### Key Capabilities:
-
-* Real-time face detection & recognition
-* Automated attendance logging
-* Capture of unknown faces for later review
-* Attendance sessions with summaries
-* Offline-first operation
-* Lightweight, simple admin interface
-
----
-
-#  **Tech Stack**
-
-| Technology            | Purpose                             |
-| --------------------- | ----------------------------------- |
-| **Python**            | Core backend language               |
-| **OpenCV**            | Face detection + video processing   |
-| **face_recognition**  | Deep learning face encodings (dlib) |
-| **Django**            | Backend logic and web framework     |
-| **SQLite/PostgreSQL** | Database options                    |
-| **Docker**            | Containerized deployment            |
-| **Bootstrap + JS**    | Admin UI and interactivity          |
+| Technology           | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
+| **Python 3.10+**     | Core backend language                            |
+| **Django 5**         | Web framework, ORM, admin                        |
+| **Django REST Framework** | API layer, token authentication, viewsets   |
+| **dlib / face_recognition** | 128D face encoding and matching         |
+| **OpenCV**           | Frame decoding, face detection (HOG + DNN), image I/O |
+| **PostgreSQL**       | Primary database                                 |
+| **React + Vite**     | Frontend SPA                                     |
+| **nginx**            | Reverse proxy, HTTPS termination, media serving  |
+| **uWSGI**            | WSGI application server                          |
+| **Docker**           | Containerized deployment                         |
 
 ---
 
-#  **System Architecture**
+## System Architecture
 
-ReconRoll is designed around four core subsystems:
-![ReconRoll Architecture](docs/ReconRoll-Architecture.png)
+The backend is a Django application served by uWSGI, sitting behind an nginx reverse proxy. The React frontend communicates with it over HTTPS via a REST API authenticated with DRF token auth.
 
-### **1. Recognition Engine**
+### Recognition Pipeline
 
-* Performs face detection and encoding
-* Compares encodings with enrolled users
-* Optimized for fast recognition using OpenCV pipelines
+When a session is started, the backend spawns a background thread (`recognition_runner.py`) and registers it in an in-memory `active_recognition` dict keyed by session ID. The thread blocks on a `queue.Queue`, waiting for frames.
 
-### **2. Session Manager**
+The frontend captures webcam frames via `canvas.toDataURL`, converts them to JPEG blobs, and POSTs them as multipart form data to `/api/sessions/<id>/upload_frame/` every 500ms. The `SessionViewSet.upload_frame` action validates the session state, checks that the recognition thread is active, and drops the frame bytes into the queue (max 30 frames buffered).
 
-* Starts, runs, and ends attendance sessions
-* Logs recognized users in real time
-* Stores unidentified face captures
+The background thread pulls frames from the queue and runs:
 
-### **3. Enrollment Pipeline**
+1. **Face detection** — HOG model by default (configurable to DNN via `FACE_MODEL=dnn`). Frames are scaled down by `SCALE` (default 0.25) before detection for speed. Faces smaller than `MIN_FACE_SIZE` pixels are ignored.
+2. **Face encoding** — dlib's 128D face encoding via the `face_recognition` library. The background thread uses `number_of_times_to_upsample=2` for better accuracy since it's not on the hot path.
+3. **Matching** — Euclidean distance comparison against known encodings loaded from the database. Match threshold is controlled by `TOLERANCE` (default 0.55). Encodings are scoped to the session's roster — only the expected people are loaded, not the entire database.
+4. **Attendance recording** — On a match, a `RosterAttendance` record is created or updated with status `present` or `late` (late if recognition time is after `session.start_time`). Events are logged to the `Event` table.
+5. **Unknown faces** — Faces that don't match any known encoding and haven't been seen before in this session are saved to disk (cropped face + full annotated frame) and recorded in `UnidentifiedFace`. Duplicate unknowns are suppressed by comparing against a session-local encoding cache.
 
-* Handles user registration
-* Captures and processes face images
-* Generates stable 128D embeddings for matching
+The thread self-terminates when the stop flag is set or when it detects the session has been marked `completed` or `cancelled` in the database.
 
-### **4. Storage Layer**
+### Enrollment
 
-* Databases for:
+People are enrolled via `POST /api/enroll/` with one or more face images. The backend:
 
-  * Encoded faces
-  * Attendance records
-  * Unknown captures
-  * Session histories
-* Defaults to SQLite but supports PostgreSQL
+- Detects and encodes each image
+- Rejects images with no face or multiple faces
+- Cross-checks all images against the first to confirm they're the same person
+- Deduplicates using SHA-256 hashes of the raw image bytes
+- Stores the 128D encoding as a serialized numpy array (`BinaryField`) in `FaceEncoding`, linked to a `Person` record
 
----
+### Session Lifecycle
 
-#  **Workflow**
+Sessions move through four states: `scheduled → in_progress → completed / cancelled`.
 
-### **1. Enrollment**
+- `POST /api/session/<id>/start/` — registers the recognition thread in `active_recognition` before setting the DB status to `in_progress`, avoiding a race condition where the frontend polls for `in_progress` and immediately fires frames before the thread is ready
+- `POST /api/session/<id>/stop/` — sets the stop flag, waits for the thread to exit, marks the session `completed`
+- If the thread crashes, it catches the exception, marks the session `cancelled`, and logs an error event
 
-Admin uploads/captures user photo → generates encoding → saved in DB.
+### Data Models
 
-### **2. Start Session**
+| Model | Purpose |
+|---|---|
+| `Person` | Enrolled individual with identification number |
+| `FaceEncoding` | 128D numpy encoding stored as binary, linked to a Person |
+| `Roster` | Reusable list of expected people |
+| `Session` | A single attendance session, optionally linked to a Roster |
+| `RosterAttendance` | Per-person attendance status for a session (present/absent/late) |
+| `AttendanceSummary` | Fallback attendance table for sessions without a roster |
+| `UnidentifiedFace` | Cropped face + full frame for unrecognized detections |
+| `Event` | Audit log of recognition events, session start/stop, errors |
 
-Admin begins a session → system starts processing frames.
+### Media & File Storage
 
-### **3. Recognition Loop**
-
-Frame-by-frame:
-
-* Face detected
-* Face encoded
-* Recognized → logged
-* Unknown → saved
-
-### **4. Session End**
-
-ReconRoll produces:
-
-* Present students
-* Absent students
-* Unknown face log
-* Attendance summary
+Enrolled face images and unidentified face captures are written to `MEDIA_ROOT` (`/vol/media` in Docker), which is a named volume shared between the Django container and nginx. nginx serves `/media/` directly from this volume without proxying through Django.
 
 ---
 
-#  **Key Modules**
+## API Documentation
 
-| Module                         | Role                                       |
-| ------------------------------ | ------------------------------------------ |
-| **Recognition Engine**         | Detects, encodes, and matches faces        |
-| **Enrollment Service**         | Registers new users and creates embeddings |
-| **Session Manager**            | Controls session lifecycle and logging     |
-| **Unknown Face Handler**       | Stores unknown captures for review         |
-| **Analytics Engine (Planned)** | Attendance stats, performance metrics      |
+A full API reference is available in [`docs/api.md`](docs/api.md). An OpenAPI 3.0 spec is also available at [`docs/openapi.yaml`](docs/openapi.yaml) — load it into Swagger UI, Redoc, or Postman to browse and test endpoints interactively.
 
 ---
 
-#  **Installation & Setup**
+## Deployment
 
-Before running, you may review the **Pre-Installation Guide**:
-[https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing](https://docs.google.com/document/d/1OgYudT0YOkN6vht0wn9dWe4mxkAFOjGnz5ulX36hd94/edit?usp=sharing)
+### Docker (Recommended)
 
----
-
-##  **Docker Setup (Recommended)**
-### You'll need to run docker on a linux distribution host for this 
+Requires a Linux host with Docker and a connected webcam.
 
 ```bash
 git clone https://github.com/peter-njoro/ReconRoll.git
-cd ReconRoll
+cd ReconRoll/backend
+cp .env.example .env   # fill in your values
+chmod +x scripts/scripts.sh
+docker compose -f docker-compose.linux.yml up --build
 ```
 
-### Start Containers
+The app will be available at `https://<your-host-ip>`. nginx handles HTTPS termination using a self-signed certificate (replace with a real cert for production).
 
-```bash
-# Linux
-chmod +x run.sh
-./run.sh
-```
+On startup, the entrypoint script runs migrations, collects static files, and optionally starts `webcam_stream.py` as a background frame forwarder if `FRAME_FORWARDER=true`.
 
-App available at:
+### Environment Variables
 
-```
-http://localhost:8000
-```
+| Variable | Default | Description |
+|---|---|---|
+| `FACE_MODEL` | `hog` | Detection model: `hog` or `dnn` |
+| `SCALE` | `0.25` | Frame scale factor before detection |
+| `TOLERANCE` | `0.55` | Face match threshold (lower = stricter) |
+| `MIN_FACE_SIZE` | `100` | Minimum face size in pixels |
+| `MEDIA_ROOT` | `/vol/media` | Where uploaded and captured images are stored |
+| `FRAME_FORWARDER` | `false` | Start the server-side webcam stream daemon |
+| `DEBUG` | `True` | Django debug mode |
 
 ---
 
-##  **Manual Setup** (traditional method)
+## Disclaimer
 
-```bash
-git clone https://github.com/peter-njoro/ReconRoll.git
-cd ReconRoll
-python -m venv venv
-source venv/bin/activate        # Linux/macOS
-venv\Scripts\activate           # Windows
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
-```
+ReconRoll is built for educational and demo purposes. It is not hardened for high-security or large-scale production deployments.
 
 ---
 
-#  **How It Works (Simple)**
-
-1. Camera captures input
-2. Face detected
-3. Face recognized or marked unknown
-4. Attendance logged instantly
-
----
-
-#  **Contributing**
-
-Contributions are welcome!
-
-* Fork the repo
-* Create a feature branch
-* Submit a PR to **development**
-
----
-
-#  **Disclaimer**
-
-ReconRoll is designed for **educational and demo purposes**.
-It is not ready for high-security or large-scale deployments.
-
----
-
-#  **Author**
+## Author
 
 **[Peter Njoroge Chege](https://www.linkedin.com/in/chege-peter/)**
 Machine Learning Engineer (In Progress)
@@ -231,9 +159,9 @@ Inspired by the original **Virone** concept by **[Everlyne Mwangi](https://www.l
 
 ---
 
-#  **Developer Notes**
+## Developer Notes
 
-If you’re reading this part:
+If you're reading this part:
 
 * Yes, pip errors still haunt me.
 * Docker promised peace, webcams declared war.

@@ -1,50 +1,69 @@
-import './styles.css';
 import './App.css';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { HomePage } from './pages/HomePage';
 import { SessionsPage } from './pages/SessionsPage';
 import { SessionDetailPage } from './pages/SessionDetailPage';
 import { CreateSessionPage } from './pages/CreateSessionPage';
+import { RosterSelectPage } from './pages/RosterSelectPage';
+import { RostersPage } from './pages/RostersPage';
 import { EnrollmentForm } from './components/EnrollmentForm';
 import { Login } from './pages/LoginPage';
 import { Signup } from './pages/SignupPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { SetUsernamePage } from './pages/SetUsernamePage';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
-  
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const displayName = user?.username
+    || user?.full_name
+    || [user?.first_name, user?.last_name].filter(Boolean).join(' ')
+    || user?.email;
+
   const handleLogout = async () => {
     await logout();
     window.location.href = '/';
   };
 
+  const close = () => setMenuOpen(false);
+
   return (
-    <nav className="navbar navbar-expand-lg fixed-top shadow-sm bg-white">
-      <div className="container">
-        <a className="navbar-brand fw-bold" href="/">
-          <i className="bi bi-camera-video"></i> FaceTrack Lite
-        </a>
-        <ul className="nav nav-pills ms-auto">
-          <li className="nav-item"><a className="nav-link" href="/">Home</a></li>
-          <li className="nav-item"><a className="nav-link" href="/enroll">Enroll</a></li>
-          <li className="nav-item"><a className="nav-link" href="/sessions">Session History</a></li>
+    <nav className="navbar">
+      <div className="navbar-inner container">
+        <Link className="navbar-brand" to="/" onClick={close}>
+          <i className="bi bi-camera-video"></i> FaceTrack
+        </Link>
+
+        <button
+          className={`navbar-hamburger${menuOpen ? ' open' : ''}`}
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="Toggle menu"
+        >
+          <span /><span /><span />
+        </button>
+
+        <ul className={`nav${menuOpen ? ' nav-open' : ''}`} onClick={close}>
+          <li><Link className="nav-link" to="/">Home</Link></li>
+          <li><Link className="nav-link" to="/enroll">Enroll</Link></li>
+          <li><Link className="nav-link" to="/rosters">Rosters</Link></li>
+          <li><Link className="nav-link" to="/sessions">Sessions</Link></li>
           {user ? (
             <>
-              <li className="nav-item">
-                <span className="navbar-text"><a className="nav-link" href="/profile">Hello, {user.username}.</a></span>
-              </li>
-              <li className="nav-item">
-                <button className="nav-link btn btn-link" onClick={handleLogout}>
+              <li><Link className="nav-link" to="/profile">Hello, {displayName}</Link></li>
+              <li>
+                <button className="nav-link nav-link-btn" onClick={handleLogout}>
                   Logout
                 </button>
               </li>
             </>
           ) : (
             <>
-              <li className="nav-item"><a className="nav-link" href="/signup">Signup</a></li>
-              <li className="nav-item"><a className="nav-link" href="/login">Signin</a></li>
+              <li><Link className="nav-link" to="/signup">Sign up</Link></li>
+              <li><Link className="nav-link" to="/login">Sign in</Link></li>
             </>
           )}
         </ul>
@@ -70,10 +89,26 @@ const AppContent = () => {
           }
         />
         <Route
+          path="/profile/username"
+          element={
+            <ProtectedRoute>
+              <SetUsernamePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/enroll"
           element={
             <ProtectedRoute>
               <EnrollmentForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rosters"
+          element={
+            <ProtectedRoute>
+              <RostersPage />
             </ProtectedRoute>
           }
         />
@@ -90,6 +125,14 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <CreateSessionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/session/:sessionId/roster"
+          element={
+            <ProtectedRoute>
+              <RosterSelectPage />
             </ProtectedRoute>
           }
         />

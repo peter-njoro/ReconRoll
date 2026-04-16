@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const Signup = () => {
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
-    full_name: '',
-    is_student: false,
-    is_teacher: false,
+    first_name: '',
+    last_name: '',
     password: '',
     password2: '',
   });
@@ -38,8 +36,15 @@ export const Signup = () => {
     }
 
     try {
-      await signup(formData);
-      navigate('/');
+      const payload = {
+        email: formData.email,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        password: formData.password,
+        password2: formData.password2,
+      };
+      await signup(payload);
+      navigate('/profile/username');
     } catch (err) {
       setErrors(err.response?.data || { general: 'Signup failed. Please try again.' });
     } finally {
@@ -47,165 +52,112 @@ export const Signup = () => {
     }
   };
 
-  const generalError = errors.general || errors.non_field_errors;
+  const generalError = errors.general || errors.non_field_errors?.[0];
+  const renderError = (value) => (Array.isArray(value) ? value[0] : value);
 
   return (
     <div className="auth-page">
-      <div className="container-lg">
-        <div className="auth-container">
-          <div className="auth-card">
-            <div className="auth-header">
-              <div className="auth-icon">
-                <i className="bi bi-person-plus"></i>
-              </div>
-              <h2 className="auth-title">Create Account</h2>
-              <p className="auth-subtitle">Join our facial recognition system</p>
-            </div>
+      <div className="auth-card">
+        <div className="auth-header">
+          <p className="auth-eyebrow">Create account</p>
+          <h1 className="auth-title">Get started</h1>
+          <p className="auth-subtitle">Just the basics to set up your access.</p>
+        </div>
 
-            {generalError && (
-              <div className="alert-custom alert-danger">
-                <i className="bi bi-exclamation-circle"></i>
-                <span>{Array.isArray(generalError) ? generalError[0] : generalError}</span>
-              </div>
-            )}
+        {generalError && (
+          <div className="alert error">{generalError}</div>
+        )}
 
-            <form onSubmit={handleSubmit} className="auth-form">
-              <div className="form-group">
-                <label htmlFor="username">Username</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-person"></i>
-                  <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    placeholder="Choose a username"
-                    value={formData.username}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                {errors.username && <span className="error-text">{errors.username}</span>}
-              </div>
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="field-row">
+            <label className="field">
+              <span>First name</span>
+              <input
+                type="text"
+                id="first_name"
+                name="first_name"
+                placeholder="Ada"
+                value={formData.first_name}
+                onChange={handleChange}
+                autoComplete="given-name"
+                required
+              />
+              {errors.first_name && <span className="error-text">{renderError(errors.first_name)}</span>}
+            </label>
 
-              <div className="form-group">
-                <label htmlFor="email">Email</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-envelope"></i>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    placeholder="Enter your email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                {errors.email && <span className="error-text">{errors.email}</span>}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="full_name">Full Name</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-card-text"></i>
-                  <input
-                    type="text"
-                    id="full_name"
-                    name="full_name"
-                    placeholder="Enter your full name"
-                    value={formData.full_name}
-                    onChange={handleChange}
-                  />
-                </div>
-                {errors.full_name && <span className="error-text">{errors.full_name}</span>}
-              </div>
-
-              <div className="form-group role-selector">
-                <label>Select Your Role</label>
-                <div className="role-options">
-                  <div className="role-check">
-                    <input
-                      type="checkbox"
-                      id="is_student"
-                      name="is_student"
-                      checked={formData.is_student}
-                      onChange={handleChange}
-                    />
-                    <label htmlFor="is_student">
-                      <i className="bi bi-book"></i>
-                      <span>I am a Student</span>
-                    </label>
-                  </div>
-                  <div className="role-check">
-                    <input
-                      type="checkbox"
-                      id="is_teacher"
-                      name="is_teacher"
-                      checked={formData.is_teacher}
-                      onChange={handleChange}
-                    />
-                    <label htmlFor="is_teacher">
-                      <i className="bi bi-mortarboard"></i>
-                      <span>I am a Teacher</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="password">Password</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-key"></i>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    placeholder="Create a strong password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                {errors.password && <span className="error-text">{errors.password}</span>}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="password2">Confirm Password</label>
-                <div className="input-wrapper">
-                  <i className="bi bi-key"></i>
-                  <input
-                    type="password"
-                    id="password2"
-                    name="password2"
-                    placeholder="Confirm your password"
-                    value={formData.password2}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                {errors.password2 && <span className="error-text">{errors.password2}</span>}
-              </div>
-
-              <button
-                type="submit"
-                className="btn-submit"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <span className="spinner"></span>
-                    Creating Account...
-                  </>
-                ) : (
-                  'Create Account'
-                )}
-              </button>
-            </form>
-
-            <div className="auth-footer">
-              <p>Already have an account? <a href="/login">Sign in</a></p>
-            </div>
+            <label className="field">
+              <span>Last name</span>
+              <input
+                type="text"
+                id="last_name"
+                name="last_name"
+                placeholder="Lovelace"
+                value={formData.last_name}
+                onChange={handleChange}
+                autoComplete="family-name"
+                required
+              />
+              {errors.last_name && <span className="error-text">{renderError(errors.last_name)}</span>}
+            </label>
           </div>
+
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="name@company.com"
+              value={formData.email}
+              onChange={handleChange}
+              autoComplete="email"
+              required
+            />
+            {errors.email && <span className="error-text">{renderError(errors.email)}</span>}
+          </label>
+
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Create a secure password"
+              value={formData.password}
+              onChange={handleChange}
+              autoComplete="new-password"
+              required
+            />
+            {errors.password && <span className="error-text">{renderError(errors.password)}</span>}
+          </label>
+
+          <label className="field">
+            <span>Confirm password</span>
+            <input
+              type="password"
+              id="password2"
+              name="password2"
+              placeholder="Repeat your password"
+              value={formData.password2}
+              onChange={handleChange}
+              autoComplete="new-password"
+              required
+            />
+            {errors.password2 && <span className="error-text">{renderError(errors.password2)}</span>}
+          </label>
+
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={loading}
+          >
+            {loading ? 'Creating account...' : 'Create account'}
+          </button>
+        </form>
+
+        <div className="auth-footer">
+          <span>Already have an account?</span>
+          <Link to="/login">Sign in</Link>
         </div>
       </div>
     </div>

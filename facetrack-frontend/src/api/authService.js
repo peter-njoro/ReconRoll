@@ -16,6 +16,11 @@ export const authService = {
     return response.data;
   },
 
+  setUsername: async (payload) => {
+    const response = await apiClient.post('/users/set_username/', payload);
+    return response.data;
+  },
+
   getProfile: async () => {
     const response = await apiClient.get('/users/me/');
     return response.data;
