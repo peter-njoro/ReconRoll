@@ -27,6 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
-.env.example
+# .env.example
 .env.production
 
