@@ -109,6 +109,10 @@ Enrolled face images and unidentified face captures are written to `MEDIA_ROOT` 
 
 A full API reference is available in [`docs/api.md`](docs/api.md). An OpenAPI 3.0 spec is also available at [`docs/openapi.yaml`](docs/openapi.yaml) — load it into Swagger UI, Redoc, or Postman to browse and test endpoints interactively.
 
+## Releases & Roadmap
+
+[`docs/releases.md`](docs/releases.md) tracks the full release history and planned versions. Releases follow the Demon Slayer Corps ranking system (Mizunoto → Hashira). Each entry covers what changed, what was dropped, and what the next version is targeting.
+
 ---
 
 ## Deployment
