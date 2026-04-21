@@ -144,5 +144,3 @@ Thumbs.db
 .pypirc
 .sage.py
 *.log
-
-~\reconroll-ecs-deployment.md
