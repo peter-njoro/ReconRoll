@@ -93,8 +93,7 @@
       "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-nginx:latest",
       "essential": true,
       "portMappings": [
-        { "containerPort": 80,  "protocol": "tcp" },
-        { "containerPort": 443, "protocol": "tcp" }
+        { "containerPort": 80, "protocol": "tcp" }
       ],
       "mountPoints": [
         {
