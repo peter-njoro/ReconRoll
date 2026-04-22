@@ -1,3 +1,0 @@
-[submodule "face_recognition_models"]
-	path = face_recognition_models
-	url = https://github.com/ageitgey/face_recognition_models.git

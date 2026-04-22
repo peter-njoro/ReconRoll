@@ -1,0 +1,25 @@
+<svg width="380" height="90" viewBox="0 0 380 90" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0B1E3F"/>
+      <stop offset="100%" stop-color="#00E3FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Circular camera aperture -->
+  <circle cx="45" cy="45" r="35" stroke="url(#grad)" stroke-width="6" fill="none"/>
+  <circle cx="45" cy="45" r="10" fill="url(#grad)" />
+
+  <!-- Brand Text -->
+  <text x="95" y="55" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="700" fill="#0B1E3F">
+    Recon
+  </text>
+  <text x="215" y="55" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="700" fill="#00E3FF">
+    Roll
+  </text>
+
+  <!-- Subtitle -->
+  <text x="95" y="75" font-family="Inter, Arial, sans-serif" font-size="14" fill="#444">
+    Intelligent Vision-Based Attendance
+  </text>
+</svg>

@@ -1,0 +1,126 @@
+{
+  "family": "reconroll-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskRole",
+  "volumes": [
+    { "name": "static_volume" },
+    { "name": "media_volume" }
+  ],
+  "containerDefinitions": [
+    {
+      "name": "reconroll",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-backend:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "static_volume",
+          "containerPath": "/vol/static"
+        },
+        {
+          "sourceVolume": "media_volume",
+          "containerPath": "/vol/media"
+        }
+      ],
+      "environment": [
+        { "name": "DJANGO_MODE",             "value": "production" },
+        { "name": "DEBUG",                   "value": "False" },
+        { "name": "DB_HOST",                 "value": "<RDS_ENDPOINT>" },
+        { "name": "DB_PORT",                 "value": "5432" },
+        { "name": "POSTGRES_DB",             "value": "facetrack_db" },
+        { "name": "FACE_MODEL",              "value": "hog" },
+        { "name": "SCALE",                   "value": "0.25" },
+        { "name": "MIN_FACE_SIZE",           "value": "100" },
+        { "name": "TOLERANCE",               "value": "0.55" },
+        { "name": "FRAME_FORWARDER",         "value": "false" },
+        { "name": "PROCESS_EVERY_N_FRAMES",  "value": "3" },
+        { "name": "CARD_DISPLAY_FRAMES",     "value": "10" },
+        { "name": "CREATE_SUPERUSER",        "value": "false" }
+      ],
+      "secrets": [
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:reconroll/SECRET_KEY"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:reconroll/POSTGRES_USER"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:reconroll/POSTGRES_PASSWORD"
+        },
+        {
+          "name": "ALLOWED_HOSTS",
+          "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/reconroll/ALLOWED_HOSTS"
+        },
+        {
+          "name": "CSRF_TRUSTED_ORIGINS",
+          "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/reconroll/CSRF_TRUSTED_ORIGINS"
+        },
+        {
+          "name": "CORS_ALLOWED_ORIGINS",
+          "valueFrom": "arn:aws:ssm:<REGION>:<ACCOUNT_ID>:parameter/reconroll/CORS_ALLOWED_ORIGINS"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/reconroll-backend",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "reconroll"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/admin/login/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 90
+      }
+    },
+    {
+      "name": "nginx",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-nginx:latest",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 80, "protocol": "tcp" }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "static_volume",
+          "containerPath": "/vol/static",
+          "readOnly": true
+        },
+        {
+          "sourceVolume": "media_volume",
+          "containerPath": "/vol/media",
+          "readOnly": true
+        }
+      ],
+      "dependsOn": [
+        {
+          "containerName": "reconroll",
+          "condition": "HEALTHY"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/reconroll-backend",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "nginx"
+        }
+      }
+    }
+  ]
+}
