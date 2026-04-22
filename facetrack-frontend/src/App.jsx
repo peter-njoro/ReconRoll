@@ -35,7 +35,21 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="navbar-inner container">
         <Link className="navbar-brand" to="/" onClick={close}>
-          <i className="bi bi-camera-video"></i> ReconRoll
+          <svg
+            width="28"
+            height="28"
+            viewBox="560 160 240 420"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+            style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}
+          >
+            <g transform="translate(680, 400)">
+              <path d="M 20,-230 C 70,-236 130,-210 150,-156 C 164,-116 156,-70 152,-30 C 164,-16 172,8 164,32 C 158,52 140,56 132,44 C 120,84 96,120 64,148 C 36,172 0,184 -24,180 C -56,176 -76,152 -72,124 C -68,100 -48,88 -28,92 C -12,96 0,108 0,124 C 8,108 12,84 8,60 C 4,32 -8,8 -16,-20 C -24,-56 -24,-104 -16,-144 C -8,-184 4,-212 20,-230 Z" fill="currentColor" />
+              <path d="M 20,-230 C 30,-276 64,-310 110,-316 C 156,-322 200,-290 210,-244 C 220,-200 200,-150 180,-120 C 188,-156 192,-204 176,-236 C 160,-268 124,-284 92,-276 C 60,-268 36,-240 24,-208 C 20,-232 18,-230 20,-230 Z" fill="currentColor" opacity="0.7" />
+              <path d="M -68,104 C -92,100 -104,116 -100,136 C -96,156 -76,160 -68,148 Z" fill="currentColor" />
+            </g>
+          </svg>
+          ReconRoll
         </Link>
 
         <button
