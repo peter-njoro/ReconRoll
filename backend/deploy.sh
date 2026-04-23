@@ -49,18 +49,20 @@ docker tag "${NGINX_REPO_NAME}:${IMAGE_TAG}" "${NGINX_ECR_URI}:${IMAGE_TAG}"
 docker push "${NGINX_ECR_URI}:${IMAGE_TAG}"
 
 echo "==> [5/5] Registering task definition and deploying..."
-TASK_DEF=$(cat ecs-task-definition.json \
-  | sed "s|<ACCOUNT_ID>|${ACCOUNT_ID}|g" \
-  | sed "s|<REGION>|${REGION}|g" \
-  | sed "s|<RDS_ENDPOINT>|${RDS_ENDPOINT}|g"
-  )
+TASK_DEF_FILE=$(mktemp /tmp/ecs-task-def-XXXXXX.json)
+trap "rm -f $TASK_DEF_FILE" EXIT
 
-NEW_TASK_ARN=$(echo "$TASK_DEF" | \
-  aws ecs register-task-definition \
-    --region "$REGION" \
-    --cli-input-json file:///dev/stdin \
-    --query 'taskDefinition.taskDefinitionArn' \
-    --output text)
+sed \
+  -e "s|<ACCOUNT_ID>|${ACCOUNT_ID}|g" \
+  -e "s|<REGION>|${REGION}|g" \
+  -e "s|<RDS_ENDPOINT>|${RDS_ENDPOINT}|g" \
+  ecs-task-definition.json > "$TASK_DEF_FILE"
+
+NEW_TASK_ARN=$(aws ecs register-task-definition \
+  --region "$REGION" \
+  --cli-input-json "file://${TASK_DEF_FILE}" \
+  --query 'taskDefinition.taskDefinitionArn' \
+  --output text)
 
 echo "    New task definition: $NEW_TASK_ARN"
 
