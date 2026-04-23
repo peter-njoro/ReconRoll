@@ -13,7 +13,7 @@
   "containerDefinitions": [
     {
       "name": "reconroll",
-      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-backend:latest",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-backend:v2.0.0-Mizunoe",
       "essential": true,
       "portMappings": [
         {
@@ -90,7 +90,7 @@
     },
     {
       "name": "nginx",
-      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-nginx:latest",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/reconroll-nginx:v2.0.0-Mizunoe",
       "essential": true,
       "portMappings": [
         { "containerPort": 80, "protocol": "tcp" }

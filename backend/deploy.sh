@@ -9,7 +9,7 @@ set -e
 REGION="${1:?Usage: ./deploy.sh <region> <account-id> <rds-endpoint> [image-tag]}"
 ACCOUNT_ID="${2:?Usage: ./deploy.sh <region> <account-id> <rds-endpoint> [image-tag]}"
 RDS_ENDPOINT="${3:?Usage: ./deploy.sh <region> <account-id> <rds-endpoint> [image-tag]}"
-IMAGE_TAG="${4:-latest}"
+IMAGE_TAG="${4:-v2.0.0-Mizunoe}"
 
 REPO_NAME="reconroll-backend"
 NGINX_REPO_NAME="reconroll-nginx"
