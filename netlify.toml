@@ -1,7 +1,7 @@
 [build]
   base = "facetrack-frontend"
   command = "npm run build"
-  publish = "facetrack-frontend/dist"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
