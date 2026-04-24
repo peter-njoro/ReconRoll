@@ -186,3 +186,5 @@ app/media/*
 app/staticfiles/*
 staticfiles/*
 app/app/*
+# Local Netlify folder
+.netlify
