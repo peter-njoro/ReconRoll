@@ -115,6 +115,27 @@ A full API reference is available in [`docs/api.md`](docs/api.md). An OpenAPI 3.
 
 ---
 
+## Benchmarks
+
+Measured on an AWS EC2 t3.medium (2 vCPU, 4 GiB) with the project's own containerized stack. Full methodology, raw results, and limitation notes: [`docs/benchmarks.md`](docs/benchmarks.md).
+
+| Metric | HOG (default) | DNN |
+|---|---|---|
+| Frame latency, 1 face (detect + encode + match) | ~860 ms | **~200 ms** |
+| Face detection (per frame) | ~708 ms | **~46 ms** |
+| 128-D encoding (per face) | ~140 ms | ~140 ms |
+| Throughput (1 session) | ~1.2 frames/s | **~5 frames/s** |
+| Faces/frame within 500 ms budget | 0–1 | **2–3** |
+| Concurrent sessions, 0% drop | 0–1 | **2** |
+
+**Takeaways:**
+
+- The bundled **DNN detector is ~15× faster** than the default HOG path (46 ms vs 708 ms per frame) — switch with `FACE_MODEL=dnn`.
+- Matching is **roster-scoped and sub-millisecond**, so frame latency barely grows with the number of enrolled people.
+- Sustains **2 concurrent sessions with zero frame drops** on a 2-vCPU box; 4 sessions still process every frame but cross the 500 ms latency budget.
+
+---
+
 ## Deployment
 
 ### Docker (Recommended)
@@ -137,7 +158,7 @@ On startup, the entrypoint script runs migrations, collects static files, and op
 
 | Variable | Default | Description |
 |---|---|---|
-| `FACE_MODEL` | `hog` | Detection model: `hog` or `dnn` |
+| `FACE_MODEL` | `hog` | Detection model: `hog` or `dnn` (`dnn` is ~15× faster — see [Benchmarks](#benchmarks)) |
 | `SCALE` | `0.25` | Frame scale factor before detection |
 | `TOLERANCE` | `0.55` | Face match threshold (lower = stricter) |
 | `MIN_FACE_SIZE` | `100` | Minimum face size in pixels |
