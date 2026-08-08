@@ -134,8 +134,9 @@ def run_config(faces_per_frame, args, known, names, images, dnn_net):
     _, p50_encode, p95_encode = stats(encode_ms)
     _, p50_match, p95_match = stats(match_ms)
 
-    per_face_encode = (np.mean(encode_ms) / faces_detected) if faces_detected else 0.0
-    per_face_match = (np.mean(match_ms) / faces_detected) if faces_detected else 0.0
+    avg_faces_per_frame = (faces_detected / n) if n else 0.0
+    per_face_encode = (np.mean(encode_ms) / avg_faces_per_frame) if avg_faces_per_frame else 0.0
+    per_face_match = (np.mean(match_ms) / avg_faces_per_frame) if avg_faces_per_frame else 0.0
 
     frames_per_s = 1000.0 / avg_total if avg_total > 0 else 0.0
     faces_per_s = (faces_detected / n) * frames_per_s if n else 0.0

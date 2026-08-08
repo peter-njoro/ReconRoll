@@ -86,7 +86,7 @@ def build_dnn_net(args):
     return net
 
 
-def run_trial(session_count, args, known, names, frame, dnn_net):
+def run_trial(session_count, args, known, names, frame, net_factory):
     q = queue.Queue(maxsize=args.queue_size)
     stop = threading.Event()
     lock = threading.Lock()
@@ -95,6 +95,10 @@ def run_trial(session_count, args, known, names, frame, dnn_net):
     dropped = {"n": 0}
 
     def worker():
+        # One net per worker, matching production where each recognition
+        # thread loads its own DNN model. cv2.dnn.Net.forward() is not
+        # thread-safe, so sharing a single net across workers deadlocks.
+        net = net_factory()
         while not stop.is_set():
             try:
                 f = q.get(timeout=0.05)
@@ -102,7 +106,7 @@ def run_trial(session_count, args, known, names, frame, dnn_net):
                 continue
             t0 = time.perf_counter()
             locs, rgb = bench_common.detect_faces(
-                f, model=args.model, upsample=args.upsample, dnn_net=dnn_net
+                f, model=args.model, upsample=args.upsample, dnn_net=net
             )
             encs = bench_common.encode_faces(rgb, locs, num_jitters=args.num_jitters)
             for enc in encs:
@@ -113,8 +117,13 @@ def run_trial(session_count, args, known, names, frame, dnn_net):
                 latencies.append(elapsed)
 
     def uploader():
+        elapsed = 0.0
         while not stop.is_set():
-            time.sleep(args.frame_interval)
+            time.sleep(0.05)
+            elapsed += 0.05
+            if elapsed < args.frame_interval:
+                continue
+            elapsed = 0.0
             if q.full():
                 with lock:
                     dropped["n"] += 1
@@ -163,6 +172,10 @@ def main():
         raise SystemExit(f"Images directory not found: {args.images_dir}")
 
     dnn_net = build_dnn_net(args) if args.model == "dnn" else None
+    del dnn_net
+
+    def net_factory():
+        return build_dnn_net(args) if args.model == "dnn" else None
 
     print("Building known encodings from roster images ...")
     known, names, _ = bench_common.load_known_encodings(
@@ -197,7 +210,7 @@ def main():
     results = []
     for raw in args.sessions.split(","):
         n = int(raw.strip())
-        row = run_trial(n, args, known, names, frame, dnn_net)
+        row = run_trial(n, args, known, names, frame, net_factory)
         results.append(row)
         verdict = "SUSTAINABLE" if row["sustainable"] else "OVERLOADED"
         print(f"Sessions: {row['sessions']}  ->  {verdict}")
